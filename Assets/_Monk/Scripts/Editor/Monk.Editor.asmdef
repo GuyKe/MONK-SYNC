@@ -1,0 +1,8 @@
+{
+  "name": "Monk.Editor",
+  "rootNamespace": "Monk.EditorTools",
+  "references": ["Monk.Runtime"],
+  "includePlatforms": ["Editor"],
+  "excludePlatforms": [],
+  "autoReferenced": true
+}
