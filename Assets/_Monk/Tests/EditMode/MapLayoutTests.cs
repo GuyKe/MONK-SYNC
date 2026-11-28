@@ -6,31 +6,71 @@ namespace Monk.Tests
 {
     public class MapLayoutTests
     {
-        [Test]
-        public void AllRowsAreTheSameWidth()
-        {
-            foreach (var row in MapLayout.Rows) Assert.AreEqual(MapLayout.Rows[0].Length, row.Length);
-        }
+        [SetUp]
+        public void Generate() => MapLayout.Generate(MapLayout.DefaultSeed);
 
-        [Test]
-        public void StartAndExitAreWalkable()
+        private static int CountWalkable()
         {
-            Assert.IsTrue(MapLayout.IsWalkable(MapLayout.At(MapLayout.StartCell.x, MapLayout.StartCell.y)));
-            Assert.AreEqual('E', MapLayout.At(MapLayout.ExitCell.x, MapLayout.ExitCell.y));
-        }
-
-        [Test]
-        public void EveryWalkableCellIsReachableFromStart()
-        {
-            var reach = MapLayout.ReachableFrom(MapLayout.StartCell);
+            int n = 0;
             for (int z = 0; z < MapLayout.Height; z++)
                 for (int x = 0; x < MapLayout.Width; x++)
-                    if (MapLayout.IsWalkable(MapLayout.At(x, z)))
-                        Assert.IsTrue(reach.Contains(new Vector2Int(x, z)), $"cell {x},{z} ('{MapLayout.At(x, z)}') is unreachable");
+                    if (MapLayout.IsWalkable(MapLayout.At(x, z))) n++;
+            return n;
         }
 
         [Test]
-        public void PitCellsOnlyTouchPitSpaceLedgesOrSolid()
+        public void MapIsBig()
+        {
+            Assert.GreaterOrEqual(MapLayout.Width, 40);
+            Assert.GreaterOrEqual(CountWalkable(), 1500);
+        }
+
+        [Test]
+        public void ManyIdenticalStartRooms()
+        {
+            int starts = 0;
+            foreach (var r in MapLayout.Rooms)
+            {
+                if (r.kind != RoomKind.Start) continue;
+                starts++;
+                Assert.AreEqual('A', MapLayout.At(r.rect.x + 2, r.rect.z + 4), "airlock in the same place in every start room");
+                Assert.AreEqual('X', MapLayout.At(r.rect.x + 5, r.rect.z + 1), "window in the same place in every start room");
+            }
+            Assert.GreaterOrEqual(starts, 5);
+        }
+
+        [Test]
+        public void EveryWalkableCellIsReachableFromEveryStartRoom()
+        {
+            int walkable = CountWalkable();
+            foreach (var r in MapLayout.Rooms)
+                if (r.kind == RoomKind.Start)
+                    Assert.AreEqual(walkable, MapLayout.ReachableFrom(r.Spawn).Count, "start room at " + r.rect.x + "," + r.rect.z);
+        }
+
+        [Test]
+        public void ExitExistsAndIsADeadEnd()
+        {
+            Assert.AreEqual('E', MapLayout.At(MapLayout.ExitCell.x, MapLayout.ExitCell.y));
+            Assert.AreEqual(1, MapLayout.PassageCount(MapLayout.ExitCell.x, MapLayout.ExitCell.y));
+        }
+
+        [Test]
+        public void DoorsAreInStraightCorridors()
+        {
+            int doors = 0;
+            for (int z = 0; z < MapLayout.Height; z++)
+                for (int x = 0; x < MapLayout.Width; x++)
+                    if (MapLayout.IsDoor(MapLayout.At(x, z)))
+                    {
+                        doors++;
+                        Assert.AreEqual(2, MapLayout.PassageCount(x, z), $"door at {x},{z} should connect exactly two cells");
+                    }
+            Assert.Greater(doors, 8);
+        }
+
+        [Test]
+        public void PitCellsOnlyTouchPitSpaceLedgesOrOtherCellsThroughWalls()
         {
             for (int z = 0; z < MapLayout.Height; z++)
                 for (int x = 0; x < MapLayout.Width; x++)
@@ -39,23 +79,23 @@ namespace Monk.Tests
                     for (int d = 0; d < 4; d++)
                     {
                         char n = MapLayout.At(x + MapLayout.DX[d], z + MapLayout.DZ[d]);
-                        Assert.IsTrue(n == ' ' || n == 'o' || MapLayout.IsPitSpace(n), $"pit cell {x},{z} touches '{n}'");
+                        if (MapLayout.IsPitSpace(n) || n == 'o') continue;
+                        Assert.IsTrue(MapLayout.NeedsWall(x, z, d), $"pit cell {x},{z} is open to '{n}'");
                     }
                 }
         }
 
         [Test]
-        public void DoorsHaveWalkableCellsOnBothSidesOfTheirAxis()
+        public void SeveralSeedsAllGenerateValidMaps()
         {
-            for (int z = 0; z < MapLayout.Height; z++)
-                for (int x = 0; x < MapLayout.Width; x++)
-                {
-                    if (!MapLayout.IsDoor(MapLayout.At(x, z))) continue;
-                    bool alongZ = MapLayout.DoorRunsAlongZ(x, z);
-                    int dx = alongZ ? 0 : 1, dz = alongZ ? 1 : 0;
-                    Assert.IsTrue(MapLayout.IsWalkable(MapLayout.At(x + dx, z + dz)) && MapLayout.IsWalkable(MapLayout.At(x - dx, z - dz)),
-                        $"door at {x},{z} does not connect two cells");
-                }
+            for (int seed = 1; seed <= 12; seed++)
+            {
+                MapLayout.Generate(seed);
+                int walkable = CountWalkable();
+                foreach (var r in MapLayout.Rooms)
+                    if (r.kind == RoomKind.Start)
+                        Assert.AreEqual(walkable, MapLayout.ReachableFrom(r.Spawn).Count, "seed " + seed);
+            }
         }
     }
 }

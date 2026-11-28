@@ -2,8 +2,7 @@
   "name": "Monk.Editor",
   "rootNamespace": "Monk.EditorTools",
   "references": [
-    "Monk.Runtime",
-    "Unity.AI.Navigation"
+    "Monk.Runtime"
   ],
   "includePlatforms": [
     "Editor"

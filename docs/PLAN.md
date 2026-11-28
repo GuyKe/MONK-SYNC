@@ -68,7 +68,7 @@ Run structure (find exit seam, next level; death resets to L0 with new seed), it
 |---|---|---|
 | M0 | Project setup | Unity 6 URP + OpenXR, builds to Quest, LFS |
 | M1 | **Locomotion prototype** | Climb a whitebox gym; feels good at 90 fps |
-| M2 | Generator v1 | Seeded L0 whitebox, chunk streaming, deterministic |
+| M2 | Generator v1 | Seeded 168 m maze with identical random-spawn start rooms, landmarks, doors, hazards (done; see README) |
 | M3 | Vertical slice | L0 art, lighting, audio, Listener, exit, death/restart |
 | M4 | Content | L1, L2, L!, items, sanity, hub |
 | M5 | Perf and comfort | 72/90 Hz on Quest 3, comfort options |

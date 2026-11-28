@@ -15,10 +15,13 @@ namespace Monk.EditorTools
 
         public sealed class Set
         {
-            public Material Wallpaper, Carpet, CeilingTile, Concrete, Metal, Hazard, Crate, Fabric, Baseboard;
+            public Material[] Wallpapers, Carpets, Ceilings;   // by theme: classic, pale / office, mold
+            public Material Concrete, Metal, Hazard, Crate, Fabric, Baseboard;
+            public Material PoolTile, Linoleum, Wood, Drywall;
+            public Material MoldDecal, Scratches, Arrow, WallCrack;
             public Material Water, Glass, Peel, Stain, Crack;
             public Material PanelOn, PanelFlicker, PanelDead, LampRed, LedGreen, LedRed, LedAmber;
-            public Material Spark, Monster, MonsterEye, ExitGlow, Rack, Red, Paper;
+            public Material Spark, ExitGlow, Rack, Red, Paper;
             public Color PanelEmit;
         }
 
@@ -170,10 +173,199 @@ namespace Monk.EditorTools
                 return new Color(0.9f, 0.96f, 1f, a);
             }, true);
 
+
+            // ----- extra variety: more wallpapers, carpets, ceilings, tile, wood, decals -----
+            var wallpaperPale = Tex("WallpaperPale", 512, (u, v) =>
+            {
+                float x = u * 512f, y = v * 512f;
+                float k = (x % 16f) < 2f ? 0.84f : 1f;                                   // pinstripes
+                float cx = (x % 64f) - 32f, cy = (y % 64f) - 32f;
+                if ((Mathf.Abs(cx) < 2f && Mathf.Abs(cy) < 8f) || (Mathf.Abs(cy) < 2f && Mathf.Abs(cx) < 8f)) k *= 0.82f; // small crosses
+                k *= 1f + (H((int)x / 2, (int)y / 2, 13) - 0.5f) * 0.04f;
+                var c = new Color(0.86f, 0.80f, 0.52f) * k;
+                float stain = Mathf.SmoothStep(0.58f, 0.85f, Fbm(u, v, 3, 4, 14));
+                c = Color.Lerp(c, new Color(0.5f, 0.4f, 0.18f), stain * 0.35f);
+                c.a = 1f;
+                return c;
+            });
+
+            var wallpaperMold = Tex("WallpaperMold", 512, (u, v) =>
+            {
+                float x = u * 512f, y = v * 512f;
+                float k = ((int)(x / 32f) % 2 == 0) ? 1f : 0.9f;
+                float cx = (x % 64f) - 32f, cy = (y % 64f) - 32f;
+                float diamond = Mathf.Abs(cx) + Mathf.Abs(cy);
+                if (diamond < 14f && diamond > 9f) k *= 0.85f;
+                var c = new Color(0.60f, 0.56f, 0.28f) * k;
+                float stain = Mathf.SmoothStep(0.45f, 0.75f, Fbm(u, v, 3, 4, 16));
+                c = Color.Lerp(c, new Color(0.34f, 0.24f, 0.08f), stain * 0.6f);
+                float mold = Mathf.SmoothStep(0.52f, 0.78f, Fbm(u, v, 5, 4, 17));
+                c = Color.Lerp(c, new Color(0.13f, 0.2f, 0.09f), mold * 0.7f);          // black-green mold
+                c.a = 1f;
+                return c;
+            });
+
+            var carpetMold = Tex("CarpetMoldy", 512, (u, v) =>
+            {
+                float fiber = 1f + (H((int)(u * 512f), (int)(v * 512f), 25) - 0.5f) * 0.16f;
+                var c = new Color(0.5f, 0.45f, 0.29f) * fiber;
+                float damp = Mathf.SmoothStep(0.4f, 0.7f, Fbm(u, v, 4, 4, 26));
+                c = Color.Lerp(c, new Color(0.2f, 0.25f, 0.13f), damp * 0.8f);
+                float dark = Mathf.SmoothStep(0.6f, 0.85f, Fbm(u, v, 6, 3, 27));
+                c = Color.Lerp(c, new Color(0.08f, 0.09f, 0.05f), dark * 0.5f);
+                c.a = 1f;
+                return c;
+            });
+
+            var carpetOffice = Tex("CarpetOffice", 512, (u, v) =>
+            {
+                float x = u * 512f, y = v * 512f;
+                float shade = 1f + (H((int)(u * 4f), (int)(v * 4f), 23) - 0.5f) * 0.14f;     // each carpet tile differs a little
+                var c = new Color(0.38f, 0.40f, 0.43f) * shade * (1f + (H((int)x, (int)y, 24) - 0.5f) * 0.1f);
+                if ((x % 128f) < 2f || (y % 128f) < 2f) c *= 0.6f;                           // tile seams
+                float stain = Mathf.SmoothStep(0.6f, 0.85f, Fbm(u, v, 4, 3, 28));
+                c = Color.Lerp(c, new Color(0.2f, 0.2f, 0.18f), stain * 0.45f);
+                c.a = 1f;
+                return c;
+            });
+
+            var ceilingStained = Tex("CeilingTileStained", 256, (u, v) =>
+            {
+                float x = u * 256f, y = v * 256f;
+                var c = new Color(0.72f, 0.68f, 0.55f);
+                if (H((int)x, (int)y, 19) > 0.98f) c *= 0.5f;
+                float stain = Mathf.SmoothStep(0.45f, 0.75f, Fbm(u, v, 2, 3, 43));
+                c = Color.Lerp(c, new Color(0.42f, 0.32f, 0.14f), stain * 0.7f);
+                float ring = Mathf.Abs(Mathf.Sqrt((u - 0.5f) * (u - 0.5f) + (v - 0.5f) * (v - 0.5f)) - 0.28f);
+                if (ring < 0.012f) c = Color.Lerp(c, new Color(0.32f, 0.24f, 0.1f), 0.6f);    // dried water ring
+                if (x < 4f || y < 4f) c = new Color(0.48f, 0.47f, 0.42f);
+                c.a = 1f;
+                return c;
+            });
+
+            var poolTile = Tex("PoolTile", 512, (u, v) =>
+            {
+                float x = u * 512f, y = v * 512f;
+                bool grout = (x % 32f) < 2f || (y % 32f) < 2f;
+                float shade = 1f + (H((int)(x / 32f), (int)(y / 32f), 31) - 0.5f) * 0.09f;
+                var c = grout ? new Color(0.5f, 0.56f, 0.54f) : new Color(0.80f, 0.9f, 0.9f) * shade;
+                float dirt = Mathf.SmoothStep(0.5f, 0.8f, Fbm(u, v, 4, 4, 32));
+                c = Color.Lerp(c, new Color(0.25f, 0.34f, 0.24f), dirt * 0.5f);              // algae and grime
+                c.a = 1f;
+                return c;
+            });
+
+            var linoleum = Tex("Linoleum", 256, (u, v) =>
+            {
+                float sp = H((int)(u * 256f), (int)(v * 256f), 41);
+                var c = new Color(0.42f, 0.46f, 0.44f) * (1f + (Fbm(u, v, 6, 3, 42) - 0.5f) * 0.25f);
+                if (sp > 0.93f) c *= 1.25f;
+                if (sp < 0.04f) c *= 0.7f;
+                float seam = ((u * 256f) % 64f) < 1.5f || ((v * 256f) % 64f) < 1.5f ? 0.7f : 1f; // floor panels
+                c *= seam;
+                c.a = 1f;
+                return c;
+            });
+
+            var wood = Tex("WoodPanel", 256, (u, v) =>
+            {
+                float x = u * 256f;
+                int plank = (int)(x / 32f);
+                float seam = (x % 32f) < 1.5f ? 0.55f : 1f;
+                float grain = 1f + (Mathf.Sin(v * Mathf.PI * 2f * 8f + H(plank, 0, 51) * 10f) * 0.5f + (H((int)x, (int)(v * 64f), 52) - 0.5f)) * 0.08f;
+                var c = new Color(0.36f, 0.22f, 0.12f) * (0.85f + H(plank, 1, 53) * 0.3f) * seam * grain;
+                c.a = 1f;
+                return c;
+            });
+
+            var drywall = Tex("Drywall", 128, (u, v) =>
+            {
+                float n = 1f + (H((int)(u * 128f), (int)(v * 128f), 55) - 0.5f) * 0.08f;
+                var c = new Color(0.80f, 0.78f, 0.70f) * n;
+                c = Color.Lerp(c, new Color(0.55f, 0.5f, 0.4f), Mathf.SmoothStep(0.6f, 0.85f, Fbm(u, v, 4, 3, 56)) * 0.5f);
+                c.a = 1f;
+                return c;
+            });
+
+            var moldDecal = Tex("MoldPatch", 128, (u, v) =>
+            {
+                float dx = (u - 0.5f) * 2f, dy = (v - 0.5f) * 2f;
+                float r = Mathf.Sqrt(dx * dx + dy * dy);
+                float n = Fbm(u, v, 6, 3, 61);
+                float a = Mathf.Clamp01((n - 0.42f) * 3f) * Mathf.SmoothStep(1f, 0.3f, r);
+                return new Color(0.1f, 0.18f, 0.07f, a * 0.85f);
+            }, true);
+
+            var scratches = Tex("TallyScratches", 128, (u, v) =>
+            {
+                bool hit = false;
+                for (int row = 0; row < 2; row++)
+                {
+                    float vv = v - row * 0.38f;
+                    for (int g = 0; g < 3; g++)
+                    {
+                        float x0 = 0.08f + g * 0.3f;
+                        for (int k = 0; k < 4; k++)
+                            if (Mathf.Abs(u - (x0 + k * 0.05f)) < 0.007f && vv > 0.5f && vv < 0.88f) hit = true;
+                        if (Mathf.Abs((vv - 0.58f) - (u - (x0 - 0.03f))) < 0.012f && u > x0 - 0.03f && u < x0 + 0.19f && vv > 0.5f && vv < 0.9f) hit = true;
+                    }
+                }
+                return hit ? new Color(0.13f, 0.12f, 0.1f, 0.85f) : new Color(0, 0, 0, 0);
+            }, true);
+
+            var arrowDecal = Tex("SprayArrow", 128, (u, v) =>
+            {
+                bool shaft = Mathf.Abs(u - 0.5f) < 0.05f && v > 0.12f && v < 0.66f;
+                bool head = v >= 0.66f && v < 0.9f && Mathf.Abs(u - 0.5f) < (0.9f - v) * 0.55f;
+                if (!(shaft || head) || H((int)(u * 128f), (int)(v * 128f), 63) < 0.12f) return new Color(0, 0, 0, 0);
+                return new Color(0.72f, 0.08f, 0.06f, 0.75f);
+            }, true);
+
+            var wallCrack = Tex("WallCrack", 256, (u, v) =>
+            {
+                float px = (u - 0.5f) * 2f, py = (v - 0.5f) * 2f;
+                float r = Mathf.Sqrt(px * px + py * py), ang = Mathf.Atan2(py, px);
+                float a = 0f;
+                for (int k = 0; k < 6; k++)
+                {
+                    float ak = H(k, 3, 141) * Mathf.PI * 2f + Mathf.Sin(r * 9f + k) * 0.18f;      // wandering cracks
+                    float along = Mathf.Cos(ang - ak) * r;
+                    float dist = Mathf.Abs(Mathf.Sin(ang - ak)) * r;
+                    if (along > 0f && r < 0.4f + H(k, 5, 142) * 0.6f && dist < 0.012f * (1.5f - r)) a = 0.9f;
+                }
+                return new Color(0.1f, 0.09f, 0.07f, a);
+            }, true);
+
             // ----- materials -----
-            s.Wallpaper = Mat("Wallpaper", Color.white, wallpaper, 0.05f, 0f);
-            s.Carpet = Mat("Carpet", Color.white, carpet, 0.05f, 0f);
-            s.CeilingTile = Mat("CeilingTile", Color.white, ceiling, 0.05f, 0f);
+            s.Wallpapers = new[]
+            {
+                Mat("Wallpaper", Color.white, wallpaper, 0.05f, 0f),
+                Mat("WallpaperPale", Color.white, wallpaperPale, 0.05f, 0f),
+                Mat("WallpaperMold", Color.white, wallpaperMold, 0.03f, 0f),
+            };
+            s.Carpets = new[]
+            {
+                Mat("Carpet", Color.white, carpet, 0.05f, 0f),
+                Mat("CarpetMoldy", Color.white, carpetMold, 0.1f, 0f),
+                Mat("CarpetOffice", Color.white, carpetOffice, 0.04f, 0f),
+            };
+            s.Ceilings = new[]
+            {
+                Mat("CeilingTile", Color.white, ceiling, 0.05f, 0f),
+                Mat("CeilingTileStained", Color.white, ceilingStained, 0.05f, 0f),
+            };
+            s.PoolTile = Mat("PoolTile", Color.white, poolTile, 0.7f, 0f);
+            s.Linoleum = Mat("Linoleum", Color.white, linoleum, 0.35f, 0f);
+            s.Wood = Mat("WoodPanel", Color.white, wood, 0.25f, 0f);
+            s.Drywall = Mat("Drywall", Color.white, drywall, 0.02f, 0f);
+            s.MoldDecal = Mat("MoldDecal", Color.white, moldDecal, 0f, 0f);
+            s.Scratches = Mat("ScratchDecal", Color.white, scratches, 0f, 0f);
+            s.Arrow = Mat("ArrowDecal", Color.white, arrowDecal, 0f, 0f);
+            s.WallCrack = Mat("WallCrackDecal", Color.white, wallCrack, 0f, 0f);
+            MakeTransparent(s.MoldDecal);
+            MakeTransparent(s.Scratches);
+            MakeTransparent(s.Arrow);
+            MakeTransparent(s.WallCrack);
             s.Concrete = Mat("Concrete", Color.white, concrete, 0.1f, 0f);
             s.Metal = Mat("Metal", Color.white, metal, 0.55f, 0.6f);
             s.Hazard = Mat("Hazard", Color.white, hazard, 0.2f, 0f);
@@ -183,7 +375,6 @@ namespace Monk.EditorTools
             s.Rack = Mat("Rack", new Color(0.1f, 0.11f, 0.12f), null, 0.4f, 0.5f);
             s.Red = Mat("Red", new Color(0.65f, 0.05f, 0.04f), null, 0.5f, 0.2f);
             s.Paper = Mat("Paper", new Color(0.88f, 0.86f, 0.78f), null, 0.1f, 0f);
-            s.Monster = Mat("Monster", new Color(0.13f, 0.1f, 0.14f), null, 0.3f, 0f);
 
             s.Water = Mat("Water", new Color(0.22f, 0.3f, 0.27f, 0.55f), null, 0.97f, 0.1f);
             MakeTransparent(s.Water);
@@ -211,8 +402,6 @@ namespace Monk.EditorTools
             SetEmission(s.LedRed, new Color(1f, 0.08f, 0.05f) * 2.5f);
             s.LedAmber = Mat("LedAmber", Color.black, null, 0.5f, 0f);
             SetEmission(s.LedAmber, new Color(1f, 0.55f, 0.05f) * 2.5f);
-            s.MonsterEye = Mat("MonsterEye", Color.black, null, 0.5f, 0f);
-            SetEmission(s.MonsterEye, new Color(1f, 0.1f, 0.05f) * 4f);
             s.ExitGlow = Mat("ExitGlow", new Color(1f, 0.95f, 0.7f), null, 0.5f, 0f);
             SetEmission(s.ExitGlow, new Color(1f, 0.93f, 0.6f) * 4f);
 
