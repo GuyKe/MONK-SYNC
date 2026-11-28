@@ -12,7 +12,7 @@ namespace Monk.EditorTools
 {
     /// <summary>
     /// The Async-style facility hub: an elevated concrete complex over the atrium with an observation window, an
-    /// airlock onto a catwalk, a cosmetics wing (mirror, mannequins, holograms, terminal), the gamemode console and the
+    /// airlock onto a flat arrival apron, a cosmetics wing (mirror, mannequins, holograms, terminal), the gamemode console and the
     /// CCTV wall. Local hub coordinates: x east 0..40, z north 0..24, y up from the hub floor.
     /// </summary>
     public static partial class MapBuilder
@@ -67,8 +67,7 @@ namespace Monk.EditorTools
 
             BuildHubShell();
             BuildHubFacade();
-            BuildAirlockAndCatwalk();
-            BuildScaffold();
+            BuildAirlockAndApron();
             BuildWardrobeWing();
             BuildTerminal();
             var console = BuildGameModeConsole();
@@ -158,9 +157,9 @@ namespace Monk.EditorTools
             Label("OBSERVATION DECK", new Vector3((x0 + x1) * 0.5f, HubY + 4.3f, planeZ + 0.2f), ReadFromNorth, 0.07f, new Color(0.95f, 0.78f, 0.1f), "Hub:Decor");
         }
 
-        // -------------------------------------------------------- airlock + catwalk
+        // -------------------------------------------------------- airlock + apron
 
-        private static void BuildAirlockAndCatwalk()
+        private static void BuildAirlockAndApron()
         {
             float planeZ = MapLayout.HubRect.z * C;
             Transform metal = Group("Hub:Metal");
@@ -205,40 +204,18 @@ namespace Monk.EditorTools
                 Part("DoorFrameStripe", Group("Hub:Decor"), HP(xx, 1.7f, 0.17f), new Vector3(0.15f, 3.4f, 0.03f), M.Hazard, 0.5f, false);
             Label("AIRLOCK  -  CATWALK ACCESS", HP(34f, 4.15f, 0.18f), ReadFromNorth, 0.045f, new Color(0.95f, 0.78f, 0.1f), "Hub:Decor");
 
-            // The catwalk: grated deck out over the atrium, railed except for a gate gap on the west side and the open end.
-            float deckY = HubY - 0.1f;
-            Part("Catwalk", Group("Hub:Floor"), new Vector3(_hubO.x + 34f, deckY, planeZ - 5.4f), new Vector3(4f, 0.2f, 10.5f), M.HubGrate, 1.5f);
-            Part("CatwalkFrame", metal, new Vector3(_hubO.x + 34f, deckY - 0.2f, planeZ - 5.4f), new Vector3(4.1f, 0.2f, 10.6f), M.Metal, 1f, false);
-            foreach (float side in new[] { 32.1f, 35.9f })
-            {
-                for (float z = -0.6f; z >= -10.2f; z -= 2f)
-                    Part("RailPost", metal, new Vector3(_hubO.x + side, HubY + 0.55f, planeZ + z), new Vector3(0.07f, 1.1f, 0.07f), M.Metal, 1f);
-                bool west = side < 34f;
-                if (west)
-                {
-                    Part("RailTop", metal, new Vector3(_hubO.x + side, HubY + 1.1f, planeZ - 0.9f), new Vector3(0.06f, 0.06f, 1.5f), M.Metal, 1f);
-                    Part("RailTop", metal, new Vector3(_hubO.x + side, HubY + 1.1f, planeZ - 7.0f), new Vector3(0.06f, 0.06f, 7.2f), M.Metal, 1f);
-                    Part("RailMid", metal, new Vector3(_hubO.x + side, HubY + 0.55f, planeZ - 7.0f), new Vector3(0.05f, 0.05f, 7.2f), M.Metal, 1f);
-                }
-                else
-                {
-                    Part("RailTop", metal, new Vector3(_hubO.x + side, HubY + 1.1f, planeZ - 5.4f), new Vector3(0.06f, 0.06f, 10.4f), M.Metal, 1f);
-                    Part("RailMid", metal, new Vector3(_hubO.x + side, HubY + 0.55f, planeZ - 5.4f), new Vector3(0.05f, 0.05f, 10.4f), M.Metal, 1f);
-                }
-            }
-            // Hazard-striped drop edge with a gap in the middle to step through.
-            foreach (float sx in new[] { 32.6f, 35.4f })
-                Part("DropEdge", Group("Hub:Decor"), new Vector3(_hubO.x + sx, HubY + 0.03f, planeZ - 10.3f), new Vector3(1.0f, 0.02f, 0.4f), M.Hazard, 0.5f, false);
-            Part("DropBar", metal, new Vector3(_hubO.x + 32.5f, HubY + 1.0f, planeZ - 10.4f), new Vector3(0.8f, 0.1f, 0.1f), M.Hazard, 0.3f, false);
-            Part("DropBar", metal, new Vector3(_hubO.x + 35.5f, HubY + 1.0f, planeZ - 10.4f), new Vector3(0.8f, 0.1f, 0.1f), M.Hazard, 0.3f, false);
-            Label("DROP ZONE", new Vector3(_hubO.x + 34f, HubY + 1.7f, planeZ - 10.4f), ReadFromWest * Quaternion.Euler(0f, 90f, 0f), 0.06f, new Color(1f, 0.3f, 0.1f), "Hub:Decor");
-
-            // Supports down to the atrium floor.
-            foreach (float z in new[] { -2f, -6f, -10f })
-                foreach (float sx in new[] { 32.2f, 35.8f })
-                    Part("CatwalkPillar", metal, new Vector3(_hubO.x + sx, HubY * 0.5f - 0.1f, planeZ + z), new Vector3(0.35f, HubY - 0.2f, 0.35f), M.Metal, 1f);
-            for (int i = 0; i < 3; i++)
-                Part("CatwalkBrace", metal, new Vector3(_hubO.x + 34f, HubY - 1.6f - i * 1.8f, planeZ - 6f), new Vector3(3.5f, 0.15f, 0.15f), M.Metal, 1f, false);
+            // Beyond the door is a flat arrival apron: step straight out into Level 0, no drop.
+            Transform floor = Group("Hub:Floor");
+            Vector3 apron = new Vector3(_hubO.x + 34f, 0.02f, planeZ - 4.2f);
+            Part("ArrivalApron", floor, apron, new Vector3(6f, 0.04f, 8f), M.HubPlate, 1.5f);
+            Part("ApronThreshold", Group("Hub:Decor"), new Vector3(apron.x, 0.045f, planeZ - 0.5f), new Vector3(4.2f, 0.01f, 0.6f), M.Hazard, 0.5f, false);
+            foreach (float sx in new[] { -3f, 3f })
+                Part("ApronEdge", Group("Hub:Decor"), new Vector3(apron.x + sx, 0.045f, apron.z), new Vector3(0.25f, 0.01f, 8f), M.Hazard, 0.5f, false);
+            Part("ApronEnd", Group("Hub:Decor"), new Vector3(apron.x, 0.045f, planeZ - 8.1f), new Vector3(6f, 0.01f, 0.25f), M.Hazard, 0.5f, false);
+            for (int i = 0; i < 4; i++)
+                Part("ApronLight", Group("Hub:Decor"), new Vector3(apron.x + (i % 2 == 0 ? -2.6f : 2.6f), 0.05f, planeZ - 2f - (i / 2) * 4f), new Vector3(0.14f, 0.03f, 0.14f), M.LedCyan, 1f, false);
+            Label("LEVEL 0  -  ENTER", new Vector3(apron.x, 0.06f, planeZ - 6.2f), LyingFacingSouth * Quaternion.Euler(0f, 180f, 0f), 0.06f, new Color(0.95f, 0.78f, 0.1f), "Hub:Decor");
+            Label("HUB", new Vector3(apron.x, 3.2f, planeZ - 0.25f), ReadFromSouth, 0.07f, new Color(0.3f, 0.9f, 1f), "Hub:Decor");
         }
 
         private static void MakeAirlockButton(IndustrialDoor door, Vector3 baseAt, string label, bool inside)
@@ -253,29 +230,6 @@ namespace Monk.EditorTools
             b.glow = cap.GetComponent<Renderer>();
             b.pressDirection = Vector3.down;
             Label(label, baseAt + Vector3.up * 1.5f, inside ? ReadFromNorth : ReadFromNorth, 0.03f, Color.white, "Hub:Decor");
-        }
-
-        // ------------------------------------------------------------ scaffold tower
-
-        /// <summary>Platforms spiralling up from the atrium floor to the catwalk: the way back up after dropping in.</summary>
-        private static void BuildScaffold()
-        {
-            float planeZ = MapLayout.HubRect.z * C;
-            Transform metal = Group("Hub:Metal");
-            (float x, float z, float top)[] steps = { (25.5f, -4.2f, 1.8f), (27.7f, -4.8f, 3.4f), (29.9f, -3.6f, 5.0f), (31.1f, -1.6f, 6.2f) };
-            foreach (var st in steps)
-            {
-                Vector3 c = new Vector3(_hubO.x + st.x, st.top - 0.075f, planeZ + st.z);
-                Part("ScaffoldDeck", Group("Hub:Floor"), c, new Vector3(2f, 0.15f, 2f), M.HubGrate, 1.5f);
-                foreach (float dx in new[] { -0.9f, 0.9f })
-                    foreach (float dz in new[] { -0.9f, 0.9f })
-                        Part("ScaffoldPost", metal, new Vector3(c.x + dx, st.top * 0.5f, c.z + dz), new Vector3(0.1f, st.top, 0.1f), M.Metal, 1f);
-                Part("ScaffoldHazard", Group("Hub:Decor"), new Vector3(c.x, st.top + 0.005f, c.z - 0.95f), new Vector3(2f, 0.01f, 0.1f), M.Hazard, 0.3f, false);
-            }
-            // Crates to get onto the first platform.
-            CrateStack(new Vector3(_hubO.x + 23.6f, 0f, planeZ - 3.4f), 1, 8f);
-            CrateStack(new Vector3(_hubO.x + 23.8f, 0f, planeZ - 5.6f), 2, 20f);
-            Label("ROUTE TO HUB", new Vector3(_hubO.x + 24.5f, 2.9f, planeZ - 0.4f), ReadFromNorth * Quaternion.Euler(0f, 180f, 0f), 0.05f, new Color(0.95f, 0.78f, 0.1f), "Hub:Decor");
         }
 
         // ---------------------------------------------------------- wardrobe wing

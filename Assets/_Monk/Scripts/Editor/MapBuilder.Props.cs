@@ -88,13 +88,13 @@ namespace Monk.EditorTools
 
         /// <summary>
         /// The main Backrooms floor the hub looks down on: tall columns, hanging fluorescents, cubicles, server rack
-        /// islands, fallen drywall and cross pipes. The drop zone under the catwalk is kept clear.
+        /// islands, fallen drywall and cross pipes. The drop zone in front of the airlock is kept clear.
         /// </summary>
         private static void BuildAtrium()
         {
             var a = MapLayout.AtriumRect;
             float ax = a.x * C, az = a.z * C;
-            bool Clear(float x, float z) => x > ax + 27f && x < ax + 39f && z > az + 19f; // under the catwalk
+            bool Clear(float x, float z) => x > ax + 27f && x < ax + 39f && z > az + 19f; // in front of the airlock
 
             // Tall columns on an 8 m grid, with pipes strung between them to swing on.
             for (int i = 1; i <= 4; i++)

@@ -45,8 +45,8 @@ namespace Monk.World
         public const int DefaultSize = 44;
         public const int DefaultSeed = 20260101;
 
-        /// <summary>Height of the hub floor above the Level 0 floor.</summary>
-        public const float HubFloorY = 7f;
+        /// <summary>Height of the hub floor above the Level 0 floor (0 = the hub is level with the maze).</summary>
+        public const float HubFloorY = 0f;
         public const float AtriumCeiling = 12.2f;
 
         private static readonly string[] PitTemplate =
