@@ -16,6 +16,9 @@ namespace Monk.Locomotion
         [Tooltip("Hand releases once its target moves this far off the surface along the normal (m).")]
         public float releaseSlack = 0.02f;
 
+        [Tooltip("Hands let go if the body is blocked by geometry for this long while pushing (s).")]
+        public float blockedReleaseTime = 0.15f;
+
         [Header("Surfaces")]
         [Range(0f, 1f), Tooltip("Slip used when a surface has no SurfaceProperties.")]
         public float defaultSlip = 0.03f;

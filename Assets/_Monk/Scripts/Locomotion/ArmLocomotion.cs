@@ -61,6 +61,7 @@ namespace Monk.Locomotion
         private Hand[] _hands;
         private VelocityHistory _history;
         private bool _wasPushing;
+        private float _blockedTime;
         private readonly Collider[] _overlaps = new Collider[16];
 
         private void Awake()
@@ -97,13 +98,28 @@ namespace Monk.Locomotion
 
             if (pushing > 0)
             {
-                Vector3 move = pushSum / pushing;
+                // Gravity still acts while hands hold: a relaxed arm on a wall sags instead of hovering.
+                Vector3 move = pushSum / pushing + Vector3.down * (profile.gravity * dt * dt);
                 float cap = profile.maxPushSpeed * dt;
                 if (move.sqrMagnitude > cap * cap) move = move.normalized * cap;
 
                 Vector3 before = BodyCenter();
                 MoveBody(move, out _);
                 Vector3 actual = BodyCenter() - before;
+
+                // Blocked: hands ask for real movement but geometry stops the body. Let go so you can't get pinned.
+                if (move.magnitude > 0.004f && actual.magnitude < move.magnitude * 0.25f) _blockedTime += dt;
+                else _blockedTime = 0f;
+                if (_blockedTime > profile.blockedReleaseTime)
+                {
+                    _blockedTime = 0f;
+                    foreach (var h in _hands)
+                    {
+                        if (!h.stuck) continue;
+                        h.stuck = false;
+                        h.lastFree = ArmTarget(h);
+                    }
+                }
 
                 _history.Push(actual / dt);
                 Velocity = Vector3.zero;
