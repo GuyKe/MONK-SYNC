@@ -74,6 +74,7 @@ namespace Monk.EditorTools
 
                 Progress("Walls and doors", 0.3f);
                 BuildWalls();
+                BuildHeaders();
                 BuildDoors();
 
                 Progress("Rooms and landmarks", 0.4f);
@@ -652,6 +653,35 @@ namespace Monk.EditorTools
                     Part("Wainscot", Group("Decor"), wp, ws, M.Wood, 1f, false);
                 }
             }
+        }
+
+        /// <summary>
+        /// Where a tall space (atrium, tall hall, pit room) opens onto a lower one, the lower ceiling's roof would be
+        /// reachable from the tall side. A header wall from the low ceiling up to the tall one closes that gap, so the
+        /// roof of the maze can never be climbed onto.
+        /// </summary>
+        private static void BuildHeaders()
+        {
+            for (int z = 0; z < MapLayout.Height; z++)
+                for (int x = 0; x < MapLayout.Width; x++)
+                    for (int dir = 0; dir < 2; dir++)
+                    {
+                        int nx = x + MapLayout.DX[dir], nz = z + MapLayout.DZ[dir];
+                        char a = MapLayout.At(x, z), b = MapLayout.At(nx, nz);
+                        if (!MapLayout.IsFloor(a) || !MapLayout.IsFloor(b) || MapLayout.NeedsWall(x, z, dir)) continue;
+                        float ca = MapLayout.CeilingHeight(a), cb = MapLayout.CeilingHeight(b);
+                        if (Mathf.Abs(ca - cb) < 0.05f) continue;
+
+                        float lo = Mathf.Min(ca, cb), hi = Mathf.Max(ca, cb) + 0.2f;
+                        bool lowIsA = ca < cb;
+                        Material mat = (RoomGlyph(a) || RoomGlyph(b)) ? M.Concrete
+                            : WallpaperFor(MapLayout.ThemeAt(lowIsA ? x : nx, lowIsA ? z : nz));
+                        bool horizontal = dir == 0;
+                        Vector3 centre = horizontal ? new Vector3((x + 0.5f) * C, (lo + hi) * 0.5f, (z + 1) * C)
+                                                    : new Vector3((x + 1) * C, (lo + hi) * 0.5f, (z + 0.5f) * C);
+                        Vector3 size = horizontal ? new Vector3(C + T, hi - lo, T) : new Vector3(T, hi - lo, C + T);
+                        Part("Header", Group(mat == M.Concrete ? "Concrete" : "Wallpaper"), centre, size, mat, 2.4f);
+                    }
         }
 
         // ---------------------------------------------------------------- doors

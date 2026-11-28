@@ -18,6 +18,9 @@ namespace Monk.Gameplay
         public float respawnGrace = 1.5f;
         [Tooltip("Head position to respawn at until a checkpoint is reached.")]
         public Vector3 startCheckpoint;
+        [Tooltip("If set, leaving this box (clipping out of the map) sends you back to your checkpoint.")]
+        public bool limitToArea;
+        public Bounds playArea;
 
         public float Health { get; private set; }
         public event Action<string> Died;
@@ -73,6 +76,12 @@ namespace Monk.Gameplay
             if (_grace > 0f) _grace -= Time.deltaTime;
 
             Vector3 p = BodyPosition;
+            if (limitToArea && !playArea.Contains(p))
+            {
+                Debug.LogWarning("[Player] Left the play area; returning to the last checkpoint.");
+                Die("Left the map");
+                return;
+            }
             foreach (var z in HazardZone.All)
                 if (z.bounds.Contains(p)) Damage(z.damage, z.cause);
 

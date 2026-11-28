@@ -741,6 +741,10 @@ namespace Monk.EditorTools
             var health = loco.gameObject.AddComponent<PlayerHealth>();
             health.locomotion = loco;
             health.startCheckpoint = start + Vector3.up * 1.3f;
+            // Safety net: if anything ever lets you out of the map, you are sent back to the hub.
+            health.limitToArea = true;
+            health.playArea = new Bounds(new Vector3(MapLayout.Width * C * 0.5f, 2f, MapLayout.Height * C * 0.5f),
+                new Vector3(MapLayout.Width * C + 6f, 24f, MapLayout.Height * C + 6f));
             loco.gameObject.AddComponent<HandInteractor>().locomotion = loco;
             loco.gameObject.AddComponent<HandImpactAudio>().locomotion = loco;
             var spawn = loco.gameObject.AddComponent<RandomSpawn>();
