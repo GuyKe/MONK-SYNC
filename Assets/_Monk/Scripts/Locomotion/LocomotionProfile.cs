@@ -16,6 +16,16 @@ namespace Monk.Locomotion
         [Tooltip("Hand releases once its target moves this far off the surface along the normal (m).")]
         public float releaseSlack = 0.02f;
 
+        [Header("Surfaces")]
+        [Range(0f, 1f), Tooltip("Slip used when a surface has no SurfaceProperties.")]
+        public float defaultSlip = 0.03f;
+
+        [Header("Arm-span scaling")]
+        [Tooltip("Arm span (controller to controller, T-pose) the tuning is designed around (m).")]
+        public float referenceArmSpan = 1.6f;
+        public float minArmScale = 0.7f;
+        public float maxArmScale = 1.5f;
+
         [Header("Body")]
         public float bodyRadius = 0.2f;
         [Tooltip("Body sphere centre relative to the head, in world space (m).")]

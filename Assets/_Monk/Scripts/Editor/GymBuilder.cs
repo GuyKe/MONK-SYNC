@@ -55,6 +55,31 @@ namespace Monk.EditorTools
             loco.leftVisual = leftVis;
             loco.rightVisual = rightVis;
             loco.bodyCollider = sphere;
+
+            rig.AddComponent<ArmSpanCalibrator>().locomotion = loco;
+
+            // Legless avatar: torso + two arms, no lower body.
+            var torso = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            torso.name = "Torso";
+            torso.layer = IgnoreRaycastLayer;
+            Object.DestroyImmediate(torso.GetComponent<Collider>());
+            torso.transform.SetParent(parent, false);
+            torso.transform.localScale = new Vector3(0.35f, 0.25f, 0.2f);
+            var avatar = rig.AddComponent<UpperBodyAvatar>();
+            avatar.locomotion = loco;
+            avatar.torso = torso.transform;
+            avatar.leftArm = MakeArm("LeftArm", parent);
+            avatar.rightArm = MakeArm("RightArm", parent);
+        }
+
+        private static LineRenderer MakeArm(string name, Transform parent)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(parent, false);
+            var lr = go.AddComponent<LineRenderer>();
+            lr.widthMultiplier = 0.06f;
+            lr.material = new Material(Shader.Find("Universal Render Pipeline/Unlit"));
+            return lr;
         }
 
         private static Transform MakeHand(string name, Transform parent, XRNode node, float radius)
@@ -113,8 +138,15 @@ namespace Monk.EditorTools
 
             // Ceiling-push beam, and a pit to fall in.
             Box(parent, "Beam", new Vector3(0, 6.2f, 14), new Vector3(8, 0.3f, 0.5f));
-            var slick = Box(parent, "Slippery Panel", new Vector3(0, 3, 29.8f), new Vector3(6, 4, 0.2f));
-            slick.AddComponent<SurfaceProperties>().grip = 0f;
+            // Surface strips on the north wall: rough -> normal -> smooth -> slick -> ice.
+            var presets = new[] { SurfacePreset.Rough, SurfacePreset.Normal, SurfacePreset.Smooth, SurfacePreset.Slick, SurfacePreset.Ice };
+            for (int i = 0; i < presets.Length; i++)
+            {
+                var strip = Box(parent, "Surface " + presets[i], new Vector3(-4 + i * 2f, 3, 29.8f), new Vector3(1.8f, 5, 0.2f));
+                strip.AddComponent<SurfaceProperties>().ApplyPreset(presets[i]);
+                var r = strip.GetComponent<Renderer>();
+                r.sharedMaterial = new Material(Shader.Find("Universal Render Pipeline/Lit")) { color = Color.Lerp(new Color(0.35f, 0.22f, 0.1f), new Color(0.7f, 0.9f, 1f), i / 4f) };
+            }
         }
 
         private static GameObject Box(Transform parent, string name, Vector3 pos, Vector3 size)

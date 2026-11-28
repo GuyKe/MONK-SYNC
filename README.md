@@ -16,3 +16,9 @@ Unity VR game: arm-locomotion movement in a procedural Backrooms. See [docs/PLAN
 Walkable geometry must use box/sphere/capsule/convex colliders (body penetration resolve needs them).
 
 Tests: Window > General > Test Runner > EditMode.
+
+## Locomotion rules
+- **Hand-contact propulsion:** pushing a hand into geometry moves the body the opposite way; real hand velocity becomes momentum when the last hand lets go.
+- **No legs / no stick walking:** there is no thumbstick locomotion. The avatar is a torso and arms (`UpperBodyAvatar`).
+- **Surface slip:** `SurfaceProperties.slipPercentage` (0 = rough bark, full traction; 1 = ice, hands slide). Presets: Rough, Normal, Smooth, Slick, Ice. The gym's north wall has one strip per preset.
+- **Arm-span scaling:** hold both grips with arms stretched out for 1.5 s (`ArmSpanCalibrator`). Hand reach scales by `referenceArmSpan / measuredSpan`, saved in PlayerPrefs.

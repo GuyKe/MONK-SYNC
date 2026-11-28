@@ -37,6 +37,10 @@ namespace Monk.Locomotion
 
         public event Action<HandContactEvent> HandContacted;
 
+        /// <summary>Virtual reach / real reach. Set by ArmSpanCalibrator. 1 = no scaling.</summary>
+        public float ArmScale { get; private set; } = 1f;
+        public void SetArmScale(float scale) => ArmScale = Mathf.Clamp(scale, profile.minArmScale, profile.maxArmScale);
+
         public Vector3 Velocity { get; private set; }
         public bool IsHandStuck(HandSide s) => _hands[(int)s].stuck;
         public Vector3 HandAnchor(HandSide s) => _hands[(int)s].anchor;
@@ -51,7 +55,7 @@ namespace Monk.Locomotion
             public Vector3 anchor;      // sphere centre while stuck
             public Vector3 normal;
             public Vector3 lastFree;    // last un-stuck hand position
-            public float grip = 1f;
+            public float slip;          // 0 = full traction, 1 = frictionless
         }
 
         private Hand[] _hands;
@@ -137,8 +141,8 @@ namespace Monk.Locomotion
 
         private Vector3 ArmTarget(Hand h)
         {
-            Vector3 p = h.controller.position;
-            Vector3 fromHead = p - head.position;
+            // Scale the real hand offset so a short-armed and a long-armed player reach (and leverage) the same.
+            Vector3 fromHead = (h.controller.position - head.position) * ArmScale;
             return head.position + Vector3.ClampMagnitude(fromHead, profile.maxArmLength);
         }
 
@@ -152,18 +156,13 @@ namespace Monk.Locomotion
 
             if (h.stuck)
             {
-                Vector3 toTarget = target - h.anchor;
-                bool offSurface = Vector3.Dot(toTarget, h.normal) > profile.releaseSlack;
-                bool tooFar = toTarget.magnitude > profile.unstickDistance;
-                if (offSurface || tooFar)
+                if (!TryHold(h, target, out delta))
                 {
                     h.stuck = false;
                     h.lastFree = target;
                     SendHaptic(h.node, 0.1f, 0.03f);
                     return false;
                 }
-
-                delta = -toTarget * h.grip;
                 return true;
             }
 
@@ -178,11 +177,9 @@ namespace Monk.Locomotion
                     surfaceMask, QueryTriggerInteraction.Ignore))
             {
                 var surface = hit.collider.GetComponentInParent<SurfaceProperties>();
-                float grip = surface != null ? surface.grip : 1f;
-                if (grip > 0f)
                 {
                     h.stuck = true;
-                    h.grip = grip;
+                    h.slip = surface != null ? surface.slipPercentage : profile.defaultSlip;
                     h.normal = hit.normal;
                     h.anchor = from + (move / dist) * hit.distance + hit.normal * profile.handSkin;
 
@@ -193,13 +190,57 @@ namespace Monk.Locomotion
                     });
                     SendHaptic(h.node, Mathf.Clamp01(speed / 4f), 0.06f);
 
-                    delta = -(target - h.anchor) * grip;
-                    return true;
+                    if (TryHold(h, target, out delta)) return true;
+                    h.stuck = false;
                 }
             }
 
             h.lastFree = target;
             return false;
+        }
+
+        /// <summary>
+        /// Resolves a stuck hand. The real hand moved by d relative to the anchor; the body moves by -d,
+        /// except the share of the tangential part the surface lets the hand slide (slip).
+        /// Returns false when the hand should let go.
+        /// </summary>
+        private bool TryHold(Hand h, Vector3 target, out Vector3 delta)
+        {
+            delta = Vector3.zero;
+            Vector3 d = target - h.anchor;
+            float dn = Vector3.Dot(d, h.normal);
+            if (dn > profile.releaseSlack) return false; // pulled off the surface
+
+            if (h.slip > 0f)
+            {
+                Vector3 tangent = d - h.normal * dn;
+                if (tangent.sqrMagnitude > 1e-8f)
+                {
+                    h.anchor += tangent * h.slip;
+                    if (!RevalidateAnchor(h)) return false; // slid off an edge
+                    d = target - h.anchor;
+                }
+            }
+
+            if (d.magnitude > profile.unstickDistance) return false;
+            delta = -d;
+            return true;
+        }
+
+        /// <summary>Re-seat a sliding anchor on the geometry under it (handles curves, edges, material changes).</summary>
+        private bool RevalidateAnchor(Hand h)
+        {
+            const float lift = 0.05f;
+            Vector3 origin = h.anchor + h.normal * lift;
+            if (!Physics.SphereCast(origin, profile.handRadius, -h.normal, out RaycastHit hit,
+                    lift + profile.handSkin + 0.03f, surfaceMask, QueryTriggerInteraction.Ignore))
+                return false;
+
+            h.normal = hit.normal;
+            h.anchor = origin - h.normal * hit.distance + hit.normal * profile.handSkin;
+            var surface = hit.collider.GetComponentInParent<SurfaceProperties>();
+            h.slip = surface != null ? surface.slipPercentage : profile.defaultSlip;
+            return true;
         }
 
         private static void SendHaptic(XRNode node, float amplitude, float duration)
