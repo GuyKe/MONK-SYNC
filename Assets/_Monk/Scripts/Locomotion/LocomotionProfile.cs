@@ -13,8 +13,8 @@ namespace Monk.Locomotion
         public float handSkin = 0.01f;
         [Tooltip("Hand releases if its target is this far from the anchor (m).")]
         public float unstickDistance = 1.0f;
-        [Tooltip("Hand releases once its target moves this far off the surface along the normal (m).")]
-        public float releaseSlack = 0.02f;
+        [Tooltip("A hand must move at least this far into a surface in one physics step to count as pressing (m). Lower = stickier.")]
+        public float minPressDistance = 0.0004f;
 
         [Tooltip("Hands let go if the body is blocked by geometry for this long while pushing (s).")]
         public float blockedReleaseTime = 0.15f;

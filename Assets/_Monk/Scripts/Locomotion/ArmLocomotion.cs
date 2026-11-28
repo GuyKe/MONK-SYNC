@@ -56,7 +56,6 @@ namespace Monk.Locomotion
             public Vector3 normal;
             public Vector3 lastFree;    // last un-stuck hand position
             public Vector3 lastRel;     // hand offset from head last step (for per-step hand motion)
-            public float separation;    // how far the hand has been drawn away from the surface (m)
             public float slip;          // 0 = full traction, 1 = frictionless
         }
 
@@ -196,7 +195,6 @@ namespace Monk.Locomotion
                 {
                     h.stuck = false;
                     h.lastFree = target;
-                    SendHaptic(h.node, 0.1f, 0.03f);
                     return false;
                 }
                 return true;
@@ -217,7 +215,6 @@ namespace Monk.Locomotion
                     h.stuck = true;
                     h.slip = surface != null ? surface.slipPercentage : profile.defaultSlip;
                     h.normal = hit.normal;
-                    h.separation = 0f;
                     h.anchor = from + (move / dist) * hit.distance + hit.normal * profile.handSkin;
 
                     float speed = dist / dt;
@@ -249,8 +246,9 @@ namespace Monk.Locomotion
             float dn = Vector3.Dot(relDelta, h.normal);
             Vector3 tangent = relDelta - h.normal * dn;
 
-            h.separation = Mathf.Max(0f, h.separation + dn);
-            if (h.separation > profile.releaseSlack) return false; // drawn off the surface
+            // A hand only counts as touching while it is actively moving into the surface. The moment it
+            // stops pressing (or moves away) it lets go, and the body keeps the momentum from the push.
+            if (dn > -profile.minPressDistance) return false;
 
             if (h.slip > 0f && tangent.sqrMagnitude > 1e-8f)
             {
