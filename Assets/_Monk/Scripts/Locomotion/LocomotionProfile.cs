@@ -5,22 +5,15 @@ namespace Monk.Locomotion
     [CreateAssetMenu(menuName = "Monk/Locomotion Profile", fileName = "LocomotionProfile")]
     public class LocomotionProfile : ScriptableObject
     {
-        [Header("Arms")]
-        [Tooltip("Max distance a hand target may be from the head (m).")]
+        [Header("Hands")]
+        [Tooltip("Max distance a virtual hand may be from the head (m).")]
         public float maxArmLength = 1.5f;
-        public float handRadius = 0.07f;
-        [Tooltip("Gap kept between hand sphere and surface (m).")]
-        public float handSkin = 0.01f;
-        [Tooltip("Hand releases if its target is this far from the anchor (m).")]
-        public float unstickDistance = 1.0f;
-        [Tooltip("A hand must move at least this far into a surface in one physics step to count as pressing (m). Lower = stickier.")]
-        public float minPressDistance = 0.0004f;
-
-        [Tooltip("Hands let go if the body is blocked by geometry for this long while pushing (s).")]
-        public float blockedReleaseTime = 0.15f;
+        public float handRadius = 0.06f;
+        [Tooltip("Gap the hand keeps from a surface it is blocked by (m).")]
+        public float handSkin = 0.005f;
 
         [Header("Surfaces")]
-        [Range(0f, 1f), Tooltip("Slip used when a surface has no SurfaceProperties.")]
+        [Range(0f, 1f), Tooltip("Slip used when a surface has no SurfaceProperties. 0 = full traction, 1 = ice.")]
         public float defaultSlip = 0.03f;
 
         [Header("Arm-span scaling")]
@@ -31,18 +24,21 @@ namespace Monk.Locomotion
 
         [Header("Body")]
         public float bodyRadius = 0.2f;
-        [Tooltip("Body sphere centre relative to the head, in world space (m).")]
-        public Vector3 bodyOffset = new Vector3(0f, -0.25f, 0f);
+        [Tooltip("Body sphere centre relative to the head (m, world axes).")]
+        public Vector3 bodyOffset = new Vector3(0f, -0.1f, 0f);
         public float bodySkin = 0.01f;
 
-        [Header("Launch / flight")]
-        public float jumpMultiplier = 1.2f;
+        [Header("Momentum")]
+        [Tooltip("Multiplier on the arm velocity that becomes body velocity.")]
+        public float jumpMultiplier = 1.1f;
         public float maxJumpSpeed = 6.5f;
+        [Tooltip("Body speed (m/s) below which a touch does not launch you. Keeps resting contact calm.")]
+        public float velocityLimit = 0.3f;
         public int velocityHistorySize = 8;
         public float gravity = 9.81f;
         [Tooltip("Air drag, 1/s.")]
-        public float drag = 0.1f;
-        [Tooltip("Hard cap on body speed while hands are pushing (m/s).")]
+        public float drag = 0.05f;
+        [Tooltip("Hard cap on how fast hands can shove the body (m/s).")]
         public float maxPushSpeed = 12f;
     }
 }
