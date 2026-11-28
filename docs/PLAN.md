@@ -23,15 +23,14 @@ A native Unity VR game. You move only by pushing and pulling off surfaces with y
 Implemented in `Assets/_Monk/Scripts/Locomotion`.
 
 Per physics step, per hand:
-1. Take the tracked hand target, clamped to `maxArmLength` from the head.
-2. Sphere-cast from the last free hand position to the target.
-3. On hit, the hand **sticks**: it stores an anchor point and surface normal.
-4. While stuck, the body moves by `anchor - target` (hand stays, body moves).
-5. The hand **releases** when the target leaves the surface (moves out along the normal), or drifts beyond `unstickDistance`.
-6. Body movement is sphere-cast so the body can't pass through walls.
-7. A rolling velocity history of the body is kept. On release of all hands: `velocity = avg(history) * jumpMultiplier`, clamped to `maxJumpSpeed`. Then gravity and drag apply.
+1. Take the tracked hand target, scaled by arm span and clamped to `maxArmLength` from the head.
+2. Sweep a sphere from the hand's previous virtual position to the target.
+3. If geometry blocks it, the virtual hand stops at the surface and the body moves by the opposite of the blocked motion. The hand slides along the surface by `slipPercentage` of its sideways motion.
+4. If nothing blocks it, the hand is free and does nothing to the body. There is no persistent "stuck" state, so a resting hand exerts no force.
+5. Body movement is sphere-cast so the body can't pass through walls. If the body is wedged and can't follow the shove, the hand lets go.
+6. Real body displacement is recorded every step. While a hand touches, the body takes the recent average velocity x `jumpMultiplier` (if above `velocityLimit`), capped at `maxJumpSpeed`. That momentum carries you after release.
 
-Surface overrides (`SurfaceProperties`): `grip` (0 = slippery/no stick), `noise` (for AI hearing).
+Surface overrides (`SurfaceProperties`): `slipPercentage` (0 = full traction, 1 = ice), `noise` (for AI hearing).
 
 Requirement: walkable geometry uses box/sphere/capsule/convex colliders (needed for penetration resolve).
 
