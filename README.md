@@ -22,3 +22,19 @@ Tests: Window > General > Test Runner > EditMode.
 - **No legs / no stick walking:** there is no thumbstick locomotion. The avatar is a torso and arms (`UpperBodyAvatar`).
 - **Surface slip:** `SurfaceProperties.slipPercentage` (0 = rough bark, full traction; 1 = ice, hands slide). Presets: Rough, Normal, Smooth, Slick, Ice. The gym's north wall has one strip per preset.
 - **Arm-span scaling:** hold both grips with arms stretched out for 1.5 s (`ArmSpanCalibrator`). Hand reach scales by `referenceArmSpan / measuredSpan`, saved in PlayerPrefs.
+
+## M2: the Backrooms map
+Menu **Monk > Build Backrooms Map** (empty scene, URP assigned) generates the whole level, the player rig and all gameplay. Save the scene afterwards. Run it again to rebuild.
+
+- **Data-driven:** the layout is the ASCII grid in `Scripts/World/MapLayout.cs` (4 m cells; legend in the file). EditMode tests check every area is reachable. Edit the grid and rebuild.
+- **Textures and audio are generated in code.** Textures land in `Assets/_Monk/Art/Generated` (delete them with Monk > Delete Generated Map Textures to regenerate). Every sound is synthesised at runtime, so there are no art or audio files to import.
+- **Areas:** concrete start zone with airlock and shattered observation window; carpet maze with an atrium; The Pitfalls (deep square drops, narrow walkways, hanging pipes); flooded hallway (slick floor, reflective water); server / relay station; tall hall with a catwalk.
+- **Verticality:** crate stacks, knocked-over dividers, ceiling pipes, a catwalk, wall nooks (hiding spots cut into drywall) and 0.9 m vent shafts between rooms.
+- **Doors:** fire doors (manual), blast doors (automatic, rise from above) and the airlock. Slap a button or lever with a hand. Closing = warning sparks and beeps, then a heavy drop. Being under it eliminates you.
+- **Monster:** the Stalker patrols the wide halls and hunts by sight and by noise (hand slaps and door slams are noise). Its NavMesh agent is wide, so vents and narrow gaps are closed to it; doorways slow it.
+- **Lighting:** ~150 emissive ceiling panels (steady, flickering, dead) but only 4 real lights, which follow the nearest working panels (`LightPanelManager`). Dead panels leave dark pockets.
+- **Audio:** fluorescent buzz that rises in pitch near a panel, vent rumbles and clanks, wet carpet squelches, water splashes, monster footsteps, a hallway reverb zone.
+- **Hazards:** door crush, pit drop, monster. Elimination respawns you at the last checkpoint.
+
+### Performance notes (Quest)
+Static geometry is batching-static; no realtime shadows; 4 realtime lights plus 2 red ones in the server room; one realtime reflection probe rendered once. If the headset struggles, lower `lightCount` on `LightPanelManager`, and bake lighting instead for a fixed look.

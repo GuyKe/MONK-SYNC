@@ -17,17 +17,17 @@ namespace Monk.EditorTools
             Undo.RegisterCreatedObjectUndo(root, "Build M1 Gym");
 
             BuildGym(root.transform);
-            BuildPlayer(root.transform);
+            BuildPlayer(root.transform, new Vector3(0, 0.1f, 0));
             Selection.activeGameObject = root;
         }
 
-        private static void BuildPlayer(Transform parent)
+        public static ArmLocomotion BuildPlayer(Transform parent, Vector3 position)
         {
             var profile = LoadOrCreateProfile();
 
             var rig = new GameObject("PlayerRig");
             rig.transform.SetParent(parent, false);
-            rig.transform.position = new Vector3(0, 0.1f, 0);
+            rig.transform.position = position;
 
             var head = new GameObject("Head");
             head.transform.SetParent(rig.transform, false);
@@ -70,6 +70,7 @@ namespace Monk.EditorTools
             avatar.torso = torso.transform;
             avatar.leftArm = MakeArm("LeftArm", parent);
             avatar.rightArm = MakeArm("RightArm", parent);
+            return loco;
         }
 
         private static LineRenderer MakeArm(string name, Transform parent)

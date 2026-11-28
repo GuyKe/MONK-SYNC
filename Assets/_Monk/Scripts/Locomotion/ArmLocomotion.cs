@@ -13,6 +13,7 @@ namespace Monk.Locomotion
         public Vector3 normal;
         public float speed;               // hand speed at impact (m/s)
         public SurfaceProperties surface; // may be null
+        public Collider collider;         // what was hit
     }
 
     /// <summary>
@@ -47,6 +48,19 @@ namespace Monk.Locomotion
         public event Action<HandContactEvent> HandContacted;
 
         public Vector3 Velocity { get; private set; }
+
+        /// <summary>World position of the body sphere's centre.</summary>
+        public Vector3 BodyPosition => BodyCenter();
+
+        /// <summary>Moves the rig so the head is at headPosition and clears all momentum.</summary>
+        public void Teleport(Vector3 headPosition)
+        {
+            transform.position += headPosition - head.position;
+            Velocity = Vector3.zero;
+            _history?.Clear();
+            _initialised = false; // hands re-seed from their new positions
+            foreach (var h in _hands) h.touching = false;
+        }
         public bool IsHandTouching(HandSide s) => _hands[(int)s].touching;
 
         /// <summary>Virtual reach / real reach, set by ArmSpanCalibrator. 1 = no scaling.</summary>
@@ -251,6 +265,7 @@ namespace Monk.Locomotion
                 HandContacted?.Invoke(new HandContactEvent
                 {
                     side = h.side, point = resolved - normal * r, normal = normal, speed = speed, surface = surface,
+                    collider = surfaceCollider,
                 });
                 SendHaptic(h.node, Mathf.Clamp01(speed / 4f), 0.06f);
                 if (debugLog) Debug.Log($"[Arm] {h.side} contact speed={speed:F2} slip={slip:F2} normal={normal}");

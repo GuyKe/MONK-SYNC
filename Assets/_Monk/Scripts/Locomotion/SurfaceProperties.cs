@@ -4,6 +4,9 @@ namespace Monk.Locomotion
 {
     public enum SurfacePreset { Custom, Rough, Normal, Smooth, Slick, Ice }
 
+    /// <summary>What a surface is made of. Drives impact sounds.</summary>
+    public enum SurfaceKind { Wallpaper, Carpet, Concrete, Metal, Water, Crate }
+
     /// <summary>
     /// Per-surface tuning. Put on a collider (or a parent of it).
     /// slipPercentage is the share of a hand's sideways (tangential) motion that slides along the surface
@@ -18,6 +21,8 @@ namespace Monk.Locomotion
         public float noise = 1f;
 
         public SurfacePreset preset = SurfacePreset.Custom;
+
+        public SurfaceKind kind = SurfaceKind.Wallpaper;
 
         public static float SlipFor(SurfacePreset p)
         {

@@ -1,7 +1,9 @@
 {
   "name": "Monk.Runtime",
   "rootNamespace": "Monk",
-  "references": [],
+  "references": [
+    "Unity.AI.Navigation"
+  ],
   "includePlatforms": [],
   "excludePlatforms": [],
   "allowUnsafeCode": false,
