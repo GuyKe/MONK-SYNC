@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace Monk.World
 {
-    public enum RoomKind { Start, Pit, Server }
+    public enum RoomKind { Hub, Pit, Server }
     public enum LobbyKind { Atrium, Tall, Pillars }
     public enum Theme { Default, Mold, Office }
 
@@ -21,8 +21,6 @@ namespace Monk.World
     {
         public RoomKind kind;
         public CellRect rect;
-        /// <summary>For a start room: the cell you appear in.</summary>
-        public Vector2Int Spawn => new Vector2Int(rect.x + 2, rect.z + 1);
     }
 
     public sealed class LobbyInfo
@@ -32,12 +30,11 @@ namespace Monk.World
     }
 
     /// <summary>
-    /// The map as data, generated from a seed. One character per 4 m cell. Every cell is floor except a few solid cells;
-    /// thin partition walls separate neighbouring cells unless a passage was carved between them (a maze), with these
-    /// hand-designed rooms stamped in and open lobbies:
-    ///   .  carpet   ,  tall hall   F  flooded   E  exit seam
-    ///   S  start room   X  start room (window east)   A  airlock door
-    ///   D  fire door (manual)   B  blast door (automatic)
+    /// The Level 0 map as data, generated from a seed. One character per 4 m cell. Every cell is floor except the solid
+    /// block the facility hub sits on; thin partition walls separate neighbouring cells unless a passage was carved
+    /// between them (a maze). Hand-designed rooms are stamped in, plus open lobbies:
+    ///   .  carpet   ,  tall hall   F  flooded   E  exit seam   H  atrium (the big hall the hub overlooks)
+    ///   D  fire door (manual)   B  blast door   A  airlock
     ///   R  server room   o  pit-room ledge   p  pit   =  walkway along X   |  walkway along Z   +  junction
     /// Rows are indexed by z (row 0 is the south edge).
     /// </summary>
@@ -45,19 +42,12 @@ namespace Monk.World
     {
         public const float Cell = 4f;
         public const float PitDepth = 6f;
-        public const int DefaultSize = 42;
+        public const int DefaultSize = 44;
         public const int DefaultSeed = 20260101;
 
-        // 9 x 5 footprint: a 6 x 4 room (window on the east side), the airlock above it, and a 3-wide open atrium
-        // east of it that the window looks into. Row 0 is the south edge.
-        private static readonly string[] StartTemplate =
-        {
-            "SSSSSS...",
-            "SSSSSX...",
-            "SSSSSX...",
-            "SSSSSS...",
-            "..A......",
-        };
+        /// <summary>Height of the hub floor above the Level 0 floor.</summary>
+        public const float HubFloorY = 7f;
+        public const float AtriumCeiling = 12.2f;
 
         private static readonly string[] PitTemplate =
         {
@@ -83,6 +73,11 @@ namespace Monk.World
         public static int Height { get; private set; }
         public static int Seed { get; private set; }
         public static Vector2Int ExitCell { get; private set; }
+
+        /// <summary>The solid block the facility hub is built on (10 x 6 cells). Its south face looks into the atrium.</summary>
+        public static CellRect HubRect { get; private set; }
+        /// <summary>The big open hall directly south of the hub (10 x 8 cells).</summary>
+        public static CellRect AtriumRect { get; private set; }
 
         public static readonly List<RoomInfo> Rooms = new List<RoomInfo>();
         public static readonly List<LobbyInfo> Lobbies = new List<LobbyInfo>();
@@ -112,7 +107,7 @@ namespace Monk.World
         {
             switch (c)
             {
-                case 'S': case 'X': case 'A': return 4.2f;
+                case 'H': return AtriumCeiling;
                 case ',': return 5.2f;
                 case 'R': return 3.0f;
                 case 'o': case 'p': case '=': case '|': case '+': return 6.4f;
@@ -169,7 +164,7 @@ namespace Monk.World
             return IsWalkable(At(x, z)) && IsWalkable(At(x + dx, z + dz)) && !NeedsWall(x, z, dir);
         }
 
-        public static HashSet<Vector2Int> ReachableFrom(Vector2Int start)
+        public static HashSet<Vector2Int> ReachableFrom(Vector2Int start, HashSet<Vector2Int> blocked = null)
         {
             var seen = new HashSet<Vector2Int> { start };
             var stack = new Stack<Vector2Int>();
@@ -181,10 +176,34 @@ namespace Monk.World
                 {
                     if (!Open(p.x, p.y, DX[d], DZ[d])) continue;
                     var n = new Vector2Int(p.x + DX[d], p.y + DZ[d]);
+                    if (blocked != null && blocked.Contains(n)) continue;
                     if (seen.Add(n)) stack.Push(n);
                 }
             }
             return seen;
+        }
+
+        /// <summary>
+        /// Picks up to `max` doors that can be locked without cutting off any part of the map: with all of them
+        /// closed, every walkable cell outside the locked doors is still reachable from the atrium.
+        /// </summary>
+        public static List<Vector2Int> ChooseLockableDoors(List<Vector2Int> candidates, int max)
+        {
+            var locked = new List<Vector2Int>();
+            var blocked = new HashSet<Vector2Int>();
+            int walkable = 0;
+            for (int z = 0; z < Height; z++)
+                for (int x = 0; x < Width; x++) if (IsWalkable(_cell[x, z])) walkable++;
+
+            foreach (var door in candidates)
+            {
+                if (locked.Count >= max) break;
+                blocked.Add(door);
+                // every walkable cell except the locked door cells must still be reachable
+                if (ReachableFrom(AtriumCentre, blocked).Count == walkable - blocked.Count) locked.Add(door);
+                else blocked.Remove(door);
+            }
+            return locked;
         }
 
         public static int PassageCount(int x, int z)
@@ -194,6 +213,8 @@ namespace Monk.World
                 if (IsFloor(At(x + DX[d], z + DZ[d])) && !NeedsWall(x, z, d)) n++;
             return n;
         }
+
+        public static Vector2Int AtriumCentre => new Vector2Int(AtriumRect.x + AtriumRect.w / 2, AtriumRect.z + AtriumRect.h / 2);
 
         // --------------------------------------------------------------- generation
 
@@ -223,14 +244,23 @@ namespace Monk.World
             for (int z = 0; z < size; z++)
                 for (int x = 0; x < size; x++) { _cell[x, z] = '.'; _roomId[x, z] = -1; _lobbyId[x, z] = -1; }
 
-            // 1. Stamp rooms and lobbies, largest first, with a gap between everything.
+            // 1. The hub block with the atrium directly in front (south) of it, then everything else, with gaps.
             var placed = new List<CellRect>();
             int roomCount = 0;
-            for (int i = 0; i < 7; i++) if (!StampRoom(rng, placed, RoomKind.Start, StartTemplate, ref roomCount)) return false;
-            for (int i = 0; i < 2; i++) if (!StampRoom(rng, placed, RoomKind.Pit, PitTemplate, ref roomCount)) return false;
+            if (!FindSpot(rng, placed, 10, 14, out var unit)) return false;
+            placed.Add(unit);
+            AtriumRect = new CellRect(unit.x, unit.z, 10, 8);
+            HubRect = new CellRect(unit.x, unit.z + 8, 10, 6);
+            for (int z = HubRect.z; z < HubRect.z + HubRect.h; z++)
+                for (int x = HubRect.x; x < HubRect.x + HubRect.w; x++) { _cell[x, z] = ' '; _roomId[x, z] = roomCount; }
+            roomCount++;
+            Rooms.Add(new RoomInfo { kind = RoomKind.Hub, rect = HubRect });
+            MarkLobby(LobbyKind.Atrium, AtriumRect);
+
+            for (int i = 0; i < 3; i++) if (!StampRoom(rng, placed, RoomKind.Pit, PitTemplate, ref roomCount)) return false;
             for (int i = 0; i < 2; i++) if (!StampRoom(rng, placed, RoomKind.Server, ServerTemplate, ref roomCount)) return false;
             for (int i = 0; i < 2; i++) if (!StampLobby(rng, placed, LobbyKind.Tall, 7, 4)) return false;
-            for (int i = 0; i < 6; i++) if (!StampLobby(rng, placed, LobbyKind.Pillars, 5, 4)) return false;
+            for (int i = 0; i < 7; i++) if (!StampLobby(rng, placed, LobbyKind.Pillars, 5, 4)) return false;
 
             // 2. A random maze (spanning tree) over every free cell.
             int free = 0;
@@ -278,28 +308,33 @@ namespace Monk.World
                         if (sameLobby || sameRoom || braid) Carve(x, z, dd);
                     }
 
+            // Wide doorways into the atrium from the maze on its west, east and south sides.
+            var a = AtriumRect;
+            for (int k = 3; k <= 4; k++)
+            {
+                OpenToFree(a.x, a.z + k, 3);
+                OpenToFree(a.x + a.w - 1, a.z + k, 1);
+            }
+            for (int k = 4; k <= 5; k++) OpenToFree(a.x + k, a.z, 2);
+
             // 4. Flood a few areas.
-            var startFootprints = new List<CellRect>();
-            foreach (var r in Rooms) if (r.kind == RoomKind.Start) startFootprints.Add(r.rect);
             for (int f = 0; f < 3; f++)
             {
                 int w = 5 + rng.Next(4), h = 5 + rng.Next(4);
                 var box = new CellRect(rng.Next(1, size - w), rng.Next(1, size - h), w, h);
-                bool nearStart = false;
-                foreach (var s in startFootprints) if (box.Overlaps(s, 0)) nearStart = true;
-                if (nearStart) { f--; if (rng.Next(100) < 3) break; continue; }
+                if (box.Overlaps(unit, 0)) { f--; if (rng.Next(100) < 3) break; continue; }
                 for (int z = box.z; z < box.z + box.h; z++)
                     for (int x = box.x; x < box.x + box.w; x++)
                         if (_cell[x, z] == '.' && _roomId[x, z] < 0 && _lobbyId[x, z] < 0) _cell[x, z] = 'F';
                 FloodBoxes.Add(box);
             }
 
-            // 5. Tall halls.
+            // 5. Tall halls and the atrium.
             foreach (var l in Lobbies)
-                if (l.kind == LobbyKind.Tall)
+                if (l.kind == LobbyKind.Tall || l.kind == LobbyKind.Atrium)
                     for (int z = l.rect.z; z < l.rect.z + l.rect.h; z++)
                         for (int x = l.rect.x; x < l.rect.x + l.rect.w; x++)
-                            if (_cell[x, z] == '.') _cell[x, z] = ',';
+                            if (_cell[x, z] == '.') _cell[x, z] = l.kind == LobbyKind.Atrium ? 'H' : ',';
 
             // 6. Themes: nearest of a few random centres.
             var centres = new List<(int x, int z, Theme t)>();
@@ -316,12 +351,11 @@ namespace Monk.World
                     }
                     _theme[x, z] = t;
                 }
-            foreach (var r in Rooms)
-                if (r.kind == RoomKind.Start)
-                    for (int z = r.rect.z; z < r.rect.z + r.rect.h; z++)
-                        for (int x = r.rect.x; x < r.rect.x + r.rect.w; x++) _theme[x, z] = Theme.Default;
+            for (int z = a.z - 2; z < a.z + a.h + 2; z++)
+                for (int x = a.x - 2; x < a.x + a.w + 2; x++)
+                    if (x >= 0 && z >= 0 && x < size && z < size) _theme[x, z] = Theme.Default;
 
-            // 7. Doors in straight corridor cells, kept apart.
+            // 7. Fire doors in straight corridor cells, kept apart.
             var candidates = new List<Vector2Int>();
             for (int z = 1; z < size - 1; z++)
                 for (int x = 1; x < size - 1; x++)
@@ -335,18 +369,18 @@ namespace Monk.World
             var doors = new List<Vector2Int>();
             foreach (var cd in candidates)
             {
-                if (doors.Count >= 18) break;
+                if (doors.Count >= 20) break;
                 bool tooClose = false;
                 foreach (var d in doors) if (Math.Abs(d.x - cd.x) + Math.Abs(d.y - cd.y) < 6) tooClose = true;
                 foreach (var r in Rooms) if (Near(r.rect, cd, 3)) tooClose = true;
                 if (tooClose) continue;
                 bool alongZ = !NeedsWall(cd.x, cd.y, 0);
-                _cell[cd.x, cd.y] = doors.Count % 3 == 2 ? 'B' : 'D';
+                _cell[cd.x, cd.y] = 'D';
                 _doorAlongZ[cd.x, cd.y] = alongZ;
                 doors.Add(cd);
             }
 
-            // 8. Dead ends, and the exit in the one farthest from every start room.
+            // 8. Dead ends, and the exit in the one farthest from the atrium.
             for (int z = 1; z < size - 1; z++)
                 for (int x = 1; x < size - 1; x++)
                 {
@@ -354,29 +388,32 @@ namespace Monk.World
                     if ((c != '.' && c != 'F') || _roomId[x, z] >= 0 || _lobbyId[x, z] >= 0) continue;
                     if (PassageCount(x, z) == 1) DeadEnds.Add(new Vector2Int(x, z));
                 }
-            if (DeadEnds.Count == 0) return false;
+            if (DeadEnds.Count < 20) return false;
             Vector2Int exit = DeadEnds[0];
             int bestDist = -1;
+            var centre = AtriumCentre;
             foreach (var de in DeadEnds)
             {
-                int nearest = int.MaxValue;
-                foreach (var r in Rooms)
-                    if (r.kind == RoomKind.Start)
-                        nearest = Math.Min(nearest, Math.Abs(de.x - r.Spawn.x) + Math.Abs(de.y - r.Spawn.y));
-                if (nearest > bestDist) { bestDist = nearest; exit = de; }
+                int dist = Math.Abs(de.x - centre.x) + Math.Abs(de.y - centre.y);
+                if (dist > bestDist) { bestDist = dist; exit = de; }
             }
             ExitCell = exit;
             _cell[exit.x, exit.y] = 'E';
             DeadEnds.Remove(exit);
 
-            // 9. Everything must be reachable from every start room.
+            // 9. Everything must be reachable from the atrium.
             int walkable = 0;
             for (int z = 0; z < size; z++)
                 for (int x = 0; x < size; x++) if (IsWalkable(_cell[x, z])) walkable++;
-            foreach (var r in Rooms)
-                if (r.kind == RoomKind.Start && ReachableFrom(r.Spawn).Count != walkable) return false;
+            return ReachableFrom(centre).Count == walkable;
+        }
 
-            return true;
+        private static void OpenToFree(int x, int z, int dir)
+        {
+            int nx = x + DX[dir], nz = z + DZ[dir];
+            if (nx < 0 || nz < 0 || nx >= Width || nz >= Height) return;
+            if (!IsFree(nx, nz)) return;
+            Carve(x, z, dir);
         }
 
         private static bool IsFree(int x, int z) => _cell[x, z] == '.' && _roomId[x, z] < 0;
@@ -427,11 +464,6 @@ namespace Monk.World
             Rooms.Add(new RoomInfo { kind = kind, rect = r });
             switch (kind)
             {
-                case RoomKind.Start:
-                    _doorAlongZ[r.x + 2, r.z + 4] = true;
-                    Carve(r.x + 2, r.z + 4, 0); // airlock opens north
-                    MarkLobby(LobbyKind.Atrium, new CellRect(r.x + 6, r.z, 3, 5));
-                    break;
                 case RoomKind.Pit:
                     Carve(r.x, r.z, 2);
                     Carve(r.x + 4, r.z + 4, 0);

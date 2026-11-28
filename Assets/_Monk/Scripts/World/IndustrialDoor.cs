@@ -9,7 +9,7 @@ namespace Monk.World
     /// <summary>
     /// Heavy industrial door. Closing is never instant: it first warns (sparks, beeping, flashing lamps), then drops
     /// with weight. A player whose body is under the panel while it closes is crushed.
-    /// Automatic doors cycle on their own; every door can also be toggled from its buttons.
+    /// Doors can be locked until a fuse box unlocks them, and heavy hydraulic doors flash their lamps while moving.
     /// </summary>
     public class IndustrialDoor : MonoBehaviour
     {
@@ -23,10 +23,14 @@ namespace Monk.World
         public bool startOpen = true;
         public Collider panelCollider;
         public Renderer[] warningLamps;
+        public Renderer[] lockLamps;
         public Material sparkMaterial;
 
         [Header("Behaviour")]
         public bool automatic;
+        public bool locked;
+        [Tooltip("Hydraulic sounds, and lamps flash while the door moves (the hub airlock).")]
+        public bool hydraulic;
         public float autoOpenSeconds = 7f;
         public float autoClosedSeconds = 4f;
         public float warningSeconds = 1.6f;
@@ -51,7 +55,7 @@ namespace Monk.World
             panel.localPosition = startOpen ? _openPos : _closedPos;
 
             _audio = panel.gameObject.AddComponent<AudioSource>();
-            ConfigureSource(_audio, false, 1.5f, 28f);
+            ConfigureSource(_audio, false, 1.5f, 32f);
 
             _loop = panel.gameObject.AddComponent<AudioSource>();
             ConfigureSource(_loop, true, 1.5f, 18f);
@@ -61,6 +65,7 @@ namespace Monk.World
             _mpb = new MaterialPropertyBlock();
             BuildSparks();
             SetLamps(0f);
+            UpdateLockLamp();
         }
 
         private static void ConfigureSource(AudioSource s, bool loop, float min, float max)
@@ -107,9 +112,14 @@ namespace Monk.World
 
         // ---------------------------------------------------------------- control
 
-        /// <summary>Open if closed; start the warning and close if open. Ignored mid-motion.</summary>
+        /// <summary>Open if closed; start the warning and close if open. Ignored mid-motion. Locked doors refuse.</summary>
         public void Toggle()
         {
+            if (locked)
+            {
+                _audio.PlayOneShot(ProceduralAudio.Deny(), 0.9f);
+                return;
+            }
             if (Current == State.Open) RequestClose();
             else if (Current == State.Closed) BeginOpen();
         }
@@ -118,6 +128,14 @@ namespace Monk.World
         {
             if (Current == State.Closed) BeginOpen();
             else if (Current == State.Warning) { Current = State.Open; SetLamps(0f); }
+        }
+
+        public void Unlock()
+        {
+            if (!locked) return;
+            locked = false;
+            UpdateLockLamp();
+            AudioSource.PlayClipAtPoint(ProceduralAudio.Clank(), panel.position, 0.6f);
         }
 
         private void RequestClose()
@@ -131,8 +149,16 @@ namespace Monk.World
         {
             Current = State.Opening;
             _t = 0f;
-            _loop.Play();
-            _audio.PlayOneShot(ProceduralAudio.Clank(), 0.5f);
+            if (hydraulic)
+            {
+                _audio.PlayOneShot(ProceduralAudio.Hydraulic(), 1f);
+                HapticFeedback.Slam(panel.position, 12f);
+            }
+            else
+            {
+                _loop.Play();
+                _audio.PlayOneShot(ProceduralAudio.Clank(), 0.5f);
+            }
         }
 
         // ----------------------------------------------------------------- update
@@ -164,7 +190,8 @@ namespace Monk.World
                     {
                         Current = State.Closing;
                         _t = 0f;
-                        _loop.Play();
+                        if (hydraulic) _audio.PlayOneShot(ProceduralAudio.Hydraulic(), 1f);
+                        else _loop.Play();
                     }
                     break;
 
@@ -182,6 +209,7 @@ namespace Monk.World
                         _audio.PlayOneShot(ProceduralAudio.Slam(), 1f);
                         _sparks.Emit(25);
                         NoiseBus.Emit(panel.position, 1f);
+                        HapticFeedback.Slam(panel.position);
                         SetLamps(0f);
                     }
                     break;
@@ -198,11 +226,13 @@ namespace Monk.World
                     _t += dt / openSeconds;
                     float rise = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(_t));
                     panel.localPosition = Vector3.Lerp(_closedPos, _openPos, rise);
+                    if (hydraulic) SetLamps(Mathf.Sin(_t * 40f) > 0f ? 0.8f : 0.05f);
                     if (_t >= 1f)
                     {
                         Current = State.Open;
                         _timer = 0f;
                         _loop.Stop();
+                        SetLamps(0f);
                     }
                     break;
             }
@@ -211,7 +241,7 @@ namespace Monk.World
         private void CrushCheck()
         {
             var health = PlayerHealth.Instance;
-            if (health == null || panelCollider == null) return;
+            if (health == null || panelCollider == null || crushDamage <= 0f) return;
             if (health.Overlaps(panelCollider.bounds)) health.Damage(crushDamage, "Crushed by a door");
         }
 
@@ -221,6 +251,14 @@ namespace Monk.World
             _mpb.SetColor(EmissionId, new Color(1f, 0.1f, 0.05f) * (level * 3f));
             foreach (var r in warningLamps)
                 if (r != null) r.SetPropertyBlock(_mpb);
+        }
+
+        private void UpdateLockLamp()
+        {
+            if (lockLamps == null) return;
+            var block = new MaterialPropertyBlock();
+            block.SetColor(EmissionId, locked ? new Color(1f, 0.05f, 0.03f) * 3f : new Color(0.1f, 1f, 0.25f) * 2.5f);
+            foreach (var r in lockLamps) if (r != null) r.SetPropertyBlock(block);
         }
     }
 }

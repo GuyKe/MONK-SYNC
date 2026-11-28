@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Monk.World;
 using NUnit.Framework;
 using UnityEngine;
@@ -26,26 +27,36 @@ namespace Monk.Tests
         }
 
         [Test]
-        public void ManyIdenticalStartRooms()
+        public void HubSitsDirectlyAboveTheAtrium()
         {
-            int starts = 0;
-            foreach (var r in MapLayout.Rooms)
+            var hub = MapLayout.HubRect;
+            var atrium = MapLayout.AtriumRect;
+            Assert.AreEqual(atrium.x, hub.x);
+            Assert.AreEqual(atrium.z + atrium.h, hub.z);
+            for (int x = hub.x; x < hub.x + hub.w; x++)
             {
-                if (r.kind != RoomKind.Start) continue;
-                starts++;
-                Assert.AreEqual('A', MapLayout.At(r.rect.x + 2, r.rect.z + 4), "airlock in the same place in every start room");
-                Assert.AreEqual('X', MapLayout.At(r.rect.x + 5, r.rect.z + 1), "window in the same place in every start room");
+                Assert.AreEqual(' ', MapLayout.At(x, hub.z), "hub block is solid");
+                Assert.AreEqual('H', MapLayout.At(x, atrium.z + atrium.h - 1), "atrium row below the hub");
+                Assert.IsTrue(MapLayout.NeedsWall(x, atrium.z + atrium.h - 1, 0), "the hub facade is a wall");
             }
-            Assert.GreaterOrEqual(starts, 5);
         }
 
         [Test]
-        public void EveryWalkableCellIsReachableFromEveryStartRoom()
+        public void AtriumHasDoorwaysIntoTheMaze()
         {
-            int walkable = CountWalkable();
-            foreach (var r in MapLayout.Rooms)
-                if (r.kind == RoomKind.Start)
-                    Assert.AreEqual(walkable, MapLayout.ReachableFrom(r.Spawn).Count, "start room at " + r.rect.x + "," + r.rect.z);
+            var a = MapLayout.AtriumRect;
+            int openings = 0;
+            for (int z = a.z; z < a.z + a.h; z++)
+                if (!MapLayout.NeedsWall(a.x, z, 3) || !MapLayout.NeedsWall(a.x + a.w - 1, z, 1)) openings++;
+            for (int x = a.x; x < a.x + a.w; x++)
+                if (!MapLayout.NeedsWall(x, a.z, 2)) openings++;
+            Assert.GreaterOrEqual(openings, 4);
+        }
+
+        [Test]
+        public void EveryWalkableCellIsReachableFromTheAtrium()
+        {
+            Assert.AreEqual(CountWalkable(), MapLayout.ReachableFrom(MapLayout.AtriumCentre).Count);
         }
 
         [Test]
@@ -56,7 +67,7 @@ namespace Monk.Tests
         }
 
         [Test]
-        public void DoorsAreInStraightCorridors()
+        public void FireDoorsAreInStraightCorridors()
         {
             int doors = 0;
             for (int z = 0; z < MapLayout.Height; z++)
@@ -66,7 +77,21 @@ namespace Monk.Tests
                         doors++;
                         Assert.AreEqual(2, MapLayout.PassageCount(x, z), $"door at {x},{z} should connect exactly two cells");
                     }
-            Assert.Greater(doors, 8);
+            Assert.Greater(doors, 10);
+        }
+
+        [Test]
+        public void LockedDoorsNeverCutTheMapInTwo()
+        {
+            var doors = new List<Vector2Int>();
+            for (int z = 0; z < MapLayout.Height; z++)
+                for (int x = 0; x < MapLayout.Width; x++)
+                    if (MapLayout.At(x, z) == 'D' && MapLayout.RoomIdAt(x, z) < 0) doors.Add(new Vector2Int(x, z));
+
+            var locked = MapLayout.ChooseLockableDoors(doors, 6);
+            Assert.GreaterOrEqual(locked.Count, 3, "enough shortcut doors to lock");
+            var blocked = new HashSet<Vector2Int>(locked);
+            Assert.AreEqual(CountWalkable() - blocked.Count, MapLayout.ReachableFrom(MapLayout.AtriumCentre, blocked).Count);
         }
 
         [Test]
@@ -91,10 +116,7 @@ namespace Monk.Tests
             for (int seed = 1; seed <= 12; seed++)
             {
                 MapLayout.Generate(seed);
-                int walkable = CountWalkable();
-                foreach (var r in MapLayout.Rooms)
-                    if (r.kind == RoomKind.Start)
-                        Assert.AreEqual(walkable, MapLayout.ReachableFrom(r.Spawn).Count, "seed " + seed);
+                Assert.AreEqual(CountWalkable(), MapLayout.ReachableFrom(MapLayout.AtriumCentre).Count, "seed " + seed);
             }
         }
     }

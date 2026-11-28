@@ -141,6 +141,55 @@ namespace Monk.Audio
             });
         }
 
+        /// <summary>Hydraulic press: a rising hiss, a servo whine, and a heavy clunk at the end.</summary>
+        public static AudioClip Hydraulic()
+        {
+            var rng = new System.Random(31);
+            float lp = 0f, phase = 0f;
+            return Build("hydraulic", 2.4f, (i, t) =>
+            {
+                float noise = (float)rng.NextDouble() * 2f - 1f;
+                float hp = noise - lp;
+                lp += (noise - lp) * 0.3f;
+                float hissEnv = Mathf.Clamp01(t * 6f) * Mathf.Clamp01((2.1f - t) * 5f);
+                float s = hp * 0.35f * hissEnv;
+                float f = Mathf.Lerp(150f, 260f, Mathf.Clamp01((t - 0.2f) / 1.8f));
+                phase += Tau * f / SampleRate;
+                float whineEnv = t > 0.2f && t < 2.0f ? Mathf.Clamp01((t - 0.2f) * 8f) * Mathf.Clamp01((2.0f - t) * 6f) : 0f;
+                s += Mathf.Sin(phase) * 0.3f * whineEnv + Mathf.Sin(phase * 2.01f) * 0.1f * whineEnv;
+                if (t > 2.1f)
+                {
+                    float dt = t - 2.1f;
+                    s += Mathf.Sin(Tau * (55f + 40f * Mathf.Exp(-dt * 20f)) * dt) * Mathf.Exp(-dt * 12f) * 1.2f;
+                }
+                return s;
+            });
+        }
+
+        /// <summary>Rising and falling alarm wail. 2 s loop (the sweep covers a whole number of cycles).</summary>
+        public static AudioClip Siren()
+        {
+            float phase = 0f;
+            return Build("siren", 2f, (i, t) =>
+            {
+                float f = 520f + 280f * Mathf.Sin(Tau * t);
+                phase += Tau * f / SampleRate;
+                return Mathf.Sin(phase) + 0.3f * Mathf.Sin(phase * 2f) + 0.12f * Mathf.Sin(phase * 3f);
+            });
+        }
+
+        /// <summary>Slow industrial klaxon pulses. 2 s loop.</summary>
+        public static AudioClip Klaxon() => Build("klaxon", 2f, (i, t) =>
+        {
+            float gate = (t % 1f) < 0.55f ? 1f : 0f;
+            float env = gate * Mathf.Clamp01((t % 1f) * 60f) * Mathf.Clamp01((0.55f - (t % 1f)) * 40f);
+            return env * (Sin(180, t) + 0.6f * Sin(360, t) + 0.35f * Sin(540, t) + 0.2f * Sin(720, t));
+        });
+
+        /// <summary>Buzzer for a locked door or a rejected input.</summary>
+        public static AudioClip Deny() => Build("deny", 0.28f, (i, t) =>
+            (Mathf.Sign(Sin(150, t)) * 0.6f + Sin(300, t) * 0.3f) * Mathf.Clamp01((0.28f - t) * 20f) * Mathf.Clamp01(t * 200f));
+
         public static AudioClip Beep() => Build("beep", 0.14f, (i, t) =>
             Sin(1500, t) * Mathf.Clamp01(t * 200f) * Mathf.Clamp01((0.14f - t) * 200f));
 

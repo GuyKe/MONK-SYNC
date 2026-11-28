@@ -1,3 +1,4 @@
+using Monk.Cosmetics;
 using Monk.Locomotion;
 using UnityEditor;
 using UnityEngine;
@@ -21,7 +22,7 @@ namespace Monk.EditorTools
             Selection.activeGameObject = root;
         }
 
-        public static ArmLocomotion BuildPlayer(Transform parent, Vector3 position)
+        public static ArmLocomotion BuildPlayer(Transform parent, Vector3 position, BackroomsAssets.Set materials = null)
         {
             var profile = LoadOrCreateProfile();
 
@@ -70,6 +71,19 @@ namespace Monk.EditorTools
             avatar.torso = torso.transform;
             avatar.leftArm = MakeArm("LeftArm", parent);
             avatar.rightArm = MakeArm("RightArm", parent);
+
+            if (materials != null)
+            {
+                var cosmetics = rig.AddComponent<AvatarCosmetics>();
+                cosmetics.head = head.transform;
+                cosmetics.torso = torso.transform;
+                cosmetics.suitMaterial = materials.Suit;
+                cosmetics.accessoryMaterial = materials.Accessory;
+                cosmetics.visorMaterials = materials.Visors;
+                cosmetics.armMaterial = materials.Mirror; // plain unlit white
+                cosmetics.suitRenderers = new Renderer[] { torso.GetComponent<Renderer>(), leftVis.GetComponent<Renderer>(), rightVis.GetComponent<Renderer>() };
+                cosmetics.armRenderers = new Renderer[] { avatar.leftArm, avatar.rightArm };
+            }
             return loco;
         }
 

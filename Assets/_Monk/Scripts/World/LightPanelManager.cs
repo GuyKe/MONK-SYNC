@@ -73,7 +73,7 @@ namespace Monk.World
             float maxSqr = maxPanelDistance * maxPanelDistance;
             foreach (var panel in LightPanel.All)
             {
-                if (panel.mode == LightPanel.Mode.Dead) continue;
+                if (!panel.Working) continue;
                 float d = (panel.transform.position - p).sqrMagnitude;
                 if (d > maxSqr) continue;
                 for (int i = 0; i < best.Length; i++)

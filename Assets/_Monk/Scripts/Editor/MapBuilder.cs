@@ -1,6 +1,8 @@
 using System.Collections.Generic;
 using Monk.Audio;
+using Monk.Cosmetics;
 using Monk.Gameplay;
+using Monk.Hub;
 using Monk.Locomotion;
 using Monk.World;
 using UnityEditor;
@@ -15,7 +17,7 @@ namespace Monk.EditorTools
     /// Menu: Monk > Build Backrooms Map. Generates a seeded maze with identical start rooms, landmarks, doors,
     /// hazards, lighting, audio and the player rig in the open scene. Run it again to rebuild.
     /// </summary>
-    public static class MapBuilder
+    public static partial class MapBuilder
     {
         private const float C = MapLayout.Cell;
         private const float T = 0.3f;            // wall thickness
@@ -56,6 +58,7 @@ namespace Monk.EditorTools
                 Groups.Clear();
                 Holes.Clear();
                 _doors.Clear();
+                _fuseCells.Clear();
                 for (int z = 0; z < MapLayout.Height; z++)
                     for (int x = 0; x < MapLayout.Width; x++)
                         if (MapLayout.IsDoor(MapLayout.At(x, z)))
@@ -72,26 +75,30 @@ namespace Monk.EditorTools
                 Progress("Walls and doors", 0.3f);
                 BuildWalls();
                 BuildDoors();
-                BuildWindows();
 
-                Progress("Rooms and landmarks", 0.45f);
+                Progress("Rooms and landmarks", 0.4f);
                 foreach (var r in MapLayout.Rooms)
                 {
-                    if (r.kind == RoomKind.Start) BuildStartRoom(r);
-                    else if (r.kind == RoomKind.Pit) BuildPitRoom(r);
-                    else BuildServerRoom(r);
+                    if (r.kind == RoomKind.Pit) BuildPitRoom(r);
+                    else if (r.kind == RoomKind.Server) BuildServerRoom(r);
                 }
                 BuildLobbies();
                 BuildFlooded();
 
-                Progress("Props and details", 0.65f);
+                Progress("Props and details", 0.55f);
+                LockDoorsAndPlaceFuses();
                 BuildMazeProps();
                 BuildDeadEnds();
                 BuildDucts();
                 BuildDetails();
                 BuildExit();
+                BuildAtrium();
 
-                Progress("Player, audio and lighting", 0.85f);
+                Progress("Facility hub", 0.7f);
+                var cctv = BuildMazeCctv();
+                BuildHub(cctv);
+
+                Progress("Interactive systems", 0.82f);
                 var loco = BuildPlayerAndGameplay();
                 BuildAudioAndLights(loco);
                 ApplyAtmosphere(loco);
@@ -102,8 +109,7 @@ namespace Monk.EditorTools
 
                 Selection.activeGameObject = _root.gameObject;
                 EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
-                Debug.Log($"Backrooms map built (seed {MapLayout.Seed}): {MapLayout.Width}x{MapLayout.Height} cells, " +
-                          $"{MapLayout.Rooms.FindAll(r => r.kind == RoomKind.Start).Count} start rooms. Save the scene (Ctrl+S).");
+                Debug.Log($"Facility hub + Level 0 built (seed {MapLayout.Seed}): {MapLayout.Width}x{MapLayout.Height} cells. Save the scene (Ctrl+S).");
             }
             finally
             {
@@ -156,6 +162,11 @@ namespace Monk.EditorTools
                 case "Crates": kind = SurfaceKind.Crate; slip = 0f; break;
                 case "Dividers": kind = SurfaceKind.Crate; slip = 0.02f; break;
                 case "Glass": kind = SurfaceKind.Glass; slip = 0.1f; break;
+                case "Hub:Concrete": kind = SurfaceKind.Concrete; slip = 0.05f; break;
+                case "Hub:Metal": kind = SurfaceKind.Metal; slip = 0.08f; break;
+                case "Hub:Floor": kind = SurfaceKind.Metal; slip = 0.1f; break;
+                case "Hub:Props": kind = SurfaceKind.Crate; slip = 0.02f; break;
+                case "Hub:Glass": kind = SurfaceKind.Glass; slip = 0.1f; break;
                 default: Groups[name] = go.transform; return go.transform;
             }
             var sp = go.AddComponent<SurfaceProperties>();
@@ -337,13 +348,12 @@ namespace Monk.EditorTools
 
         private static void RegisterHoles()
         {
-            for (int z = 0; z < MapLayout.Height; z++)
-                for (int x = 0; x < MapLayout.Width; x++)
-                {
-                    char ch = MapLayout.At(x, z);
-                    if (ch == 'X' && MapLayout.IsFloor(MapLayout.At(x + 1, z)) && MapLayout.NeedsWall(x, z, 1))
-                        Holes[(x, z, 1)] = new Hole { along = (z + 0.5f) * C, width = 3.2f, y0 = 1.1f, y1 = 2.7f };
-                }
+            // The hub's south face: a huge observation window (cells 4..7 of the hub) and the airlock opening (cell 8).
+            var atrium = MapLayout.AtriumRect;
+            int top = atrium.z + atrium.h - 1;
+            for (int i = 4; i <= 7; i++)
+                Holes[(atrium.x + i, top, 0)] = new Hole { along = (atrium.x + i + 0.5f) * C, width = 3.8f, y0 = MapLayout.HubFloorY + 0.9f, y1 = MapLayout.HubFloorY + 3.9f };
+            Holes[(atrium.x + 8, top, 0)] = new Hole { along = (atrium.x + 8.5f) * C, width = 3.2f, y0 = MapLayout.HubFloorY, y1 = MapLayout.HubFloorY + 3.4f };
 
             // Broken drywall: holes cut through ordinary partitions, with crates to climb up to them.
             for (int z = 0; z < MapLayout.Height; z++)
@@ -547,7 +557,9 @@ namespace Monk.EditorTools
             bool pool = (fa && a == 'F') || (fb && b == 'F');
             bool room = (fa && RoomGlyph(a)) || (fb && RoomGlyph(b));
             int cx = fa ? x : nx, cz = fa ? z : nz;
-            if (pool) { s.mat = M.PoolTile; s.group = "Concrete"; }
+            bool facade = (fa && a == 'H' && !fb) || (fb && b == 'H' && !fa);   // the hub's south face
+            if (facade) { s.mat = M.HubConcrete; s.group = "Concrete"; }
+            else if (pool) { s.mat = M.PoolTile; s.group = "Concrete"; }
             else if (room) { s.mat = M.Concrete; s.group = "Concrete"; }
             else { s.mat = WallpaperFor(MapLayout.ThemeAt(cx, cz)); s.group = "Wallpaper"; s.wallpaper = true; }
             return s;
@@ -644,25 +656,26 @@ namespace Monk.EditorTools
 
         // ---------------------------------------------------------------- doors
 
+        private struct MazeDoor { public IndustrialDoor door; public Vector2Int cell; }
+        private static readonly List<MazeDoor> _mazeDoors = new List<MazeDoor>();
+
         private static void BuildDoors()
         {
+            _mazeDoors.Clear();
             for (int z = 0; z < MapLayout.Height; z++)
                 for (int x = 0; x < MapLayout.Width; x++)
-                {
-                    char ch = MapLayout.At(x, z);
-                    if (MapLayout.IsDoor(ch)) BuildDoor(x, z, ch);
-                }
+                    if (MapLayout.IsDoor(MapLayout.At(x, z))) BuildDoor(x, z);
         }
 
-        private static void BuildDoor(int x, int z, char ch)
+        /// <summary>A heavy fire door in a corridor: buttons on both sides, warning lamps, a lock lamp, hazard framing.</summary>
+        private static void BuildDoor(int x, int z)
         {
             Vector3 c = MapLayout.CellCenter(x, z);
             bool alongZ = MapLayout.DoorRunsAlongZ(x, z);
-            float ceil = MapLayout.CeilingHeight(ch);
-            float thick = ch == 'A' ? 0.7f : ch == 'B' ? 0.5f : 0.35f;
-            string label = ch == 'A' ? "Airlock Door" : ch == 'B' ? "Blast Door" : "Fire Door";
+            float ceil = MapLayout.CeilingHeight(MapLayout.At(x, z));
+            const float thick = 0.4f;
 
-            var root = new GameObject(label);
+            var root = new GameObject("Fire Door");
             root.transform.SetParent(Group("Doors"), false);
             root.transform.position = c;
 
@@ -676,7 +689,7 @@ namespace Monk.EditorTools
             sp.kind = SurfaceKind.Metal;
             sp.slipPercentage = 0.1f;
 
-            // Doors rise into a housing above the ceiling (nothing else is behind the walls to slide into).
+            // Doors rise into a housing above the ceiling (nothing else is behind the thin walls to slide into).
             Vector3 hs = alongZ ? new Vector3(C + 0.2f, ceil + 0.1f, thick + 0.4f) : new Vector3(thick + 0.4f, ceil + 0.1f, C + 0.2f);
             Part("Housing", root.transform, new Vector3(c.x, ceil + 0.2f + (ceil + 0.1f) * 0.5f, c.z), hs, M.Metal, 1f, false);
 
@@ -705,32 +718,36 @@ namespace Monk.EditorTools
             door.sparkMaterial = M.Spark;
             door.style = DoorStyle.Rise;
             door.openOffset = new Vector3(0f, ceil + 0.1f, 0f);
-            door.startOpen = ch != 'A';
-            door.automatic = ch == 'B';
-            if (ch == 'A') { door.warningSeconds = 1.2f; door.closeSeconds = 1.4f; door.openSeconds = 3f; }
+            door.startOpen = true;
+            door.automatic = false;                 // fire doors are worked by hand
+            door.warningSeconds = 1.4f;
+            door.closeSeconds = 0.75f;
 
+            // Two buttons per wall (one each side of the door), plus a lock lamp, exit sign and hazard frame.
+            var lockLamps = new List<Renderer>();
             float wallOff = C * 0.5f - T * 0.5f;
-            for (int s = -1; s <= 1; s += 2)
+            for (int wall = -1; wall <= 1; wall += 2)
             {
-                float along = s * 1.1f;
-                Vector3 east = alongZ ? new Vector3(c.x + wallOff, 1.3f, c.z + along) : new Vector3(c.x + along, 1.3f, c.z + wallOff);
-                Vector3 west = alongZ ? new Vector3(c.x - wallOff, 1.3f, c.z + along) : new Vector3(c.x + along, 1.3f, c.z - wallOff);
-                Vector3 outE = alongZ ? Vector3.left : Vector3.back;
-                Vector3 outW = -outE;
+                Vector3 outward = alongZ ? new Vector3(-wall, 0f, 0f) : new Vector3(0f, 0f, -wall);
+                for (int s = -1; s <= 1; s += 2)
+                {
+                    float along = s * 1.1f;
+                    Vector3 pt = alongZ ? new Vector3(c.x + wall * wallOff, 1.3f, c.z + along) : new Vector3(c.x + along, 1.3f, c.z + wall * wallOff);
+                    MountButton(door, pt, outward);
 
-                MountButton(door, east, outE);
-                if (ch == 'A') MountButton(door, west, outW);
-                else MountLever(door, west, outW);
-
+                    Vector3 stripeAt = alongZ ? new Vector3(c.x + wall * wallOff, ceil * 0.5f, c.z + s * (thick * 0.5f + 0.32f)) : new Vector3(c.x + s * (thick * 0.5f + 0.32f), ceil * 0.5f, c.z + wall * wallOff);
+                    Vector3 stripeSz = alongZ ? new Vector3(0.02f, ceil, 0.16f) : new Vector3(0.16f, ceil, 0.02f);
+                    Part("FrameStripe", Group("Decor"), stripeAt + outward * 0.012f, stripeSz, M.Hazard, 0.5f, false);
+                }
+                Vector3 lampAt = alongZ ? new Vector3(c.x + wall * wallOff, 1.95f, c.z) : new Vector3(c.x, 1.95f, c.z + wall * wallOff);
+                Vector3 lampSize = alongZ ? new Vector3(0.04f, 0.14f, 0.3f) : new Vector3(0.3f, 0.14f, 0.04f);
+                lockLamps.Add(Part("LockLamp", Group("Decor"), lampAt + outward * 0.03f, lampSize, M.LedRed, 1f, false).GetComponent<Renderer>());
+                Vector3 signAt = new Vector3(lampAt.x, 2.55f, lampAt.z);
                 Vector3 signSize = alongZ ? new Vector3(0.04f, 0.18f, 0.5f) : new Vector3(0.5f, 0.18f, 0.04f);
-                Part("ExitSign", Group("Decor"), new Vector3(east.x, 2.55f, east.z) + outE * 0.03f, signSize, M.LedGreen, 1f, false);
-                Part("ExitSign", Group("Decor"), new Vector3(west.x, 2.55f, west.z) + outW * 0.03f, signSize, M.LedGreen, 1f, false);
-                Vector3 stripeE = alongZ ? new Vector3(c.x + wallOff, ceil * 0.5f, c.z + s * (thick * 0.5f + 0.32f)) : new Vector3(c.x + s * (thick * 0.5f + 0.32f), ceil * 0.5f, c.z + wallOff);
-                Vector3 stripeW = alongZ ? new Vector3(c.x - wallOff, ceil * 0.5f, c.z + s * (thick * 0.5f + 0.32f)) : new Vector3(c.x + s * (thick * 0.5f + 0.32f), ceil * 0.5f, c.z - wallOff);
-                Vector3 stripeSz = alongZ ? new Vector3(0.02f, ceil, 0.16f) : new Vector3(0.16f, ceil, 0.02f);
-                Part("FrameStripe", Group("Decor"), stripeE + outE * 0.012f, stripeSz, M.Hazard, 0.5f, false);
-                Part("FrameStripe", Group("Decor"), stripeW + outW * 0.012f, stripeSz, M.Hazard, 0.5f, false);
+                Part("ExitSign", Group("Decor"), signAt + outward * 0.03f, signSize, M.LedGreen, 1f, false);
             }
+            door.lockLamps = lockLamps.ToArray();
+            _mazeDoors.Add(new MazeDoor { door = door, cell = new Vector2Int(x, z) });
         }
 
         private static void MountButton(IndustrialDoor door, Vector3 wallPoint, Vector3 outward)
@@ -743,101 +760,8 @@ namespace Monk.EditorTools
             var b = cap.AddComponent<DoorButton>();
             b.door = door;
             b.cap = cap.transform;
+            b.glow = cap.GetComponent<Renderer>();
             b.pressDirection = -outward;
-        }
-
-        private static void MountLever(IndustrialDoor door, Vector3 wallPoint, Vector3 outward)
-        {
-            bool onX = Mathf.Abs(outward.x) > 0.5f;
-            Vector3 plateSize = onX ? new Vector3(0.06f, 0.5f, 0.22f) : new Vector3(0.22f, 0.5f, 0.06f);
-            Part("LeverPlate", Group("Decor"), wallPoint + outward * 0.03f, plateSize, M.Rack, 1f, false);
-
-            var root = new GameObject("DoorLever");
-            root.transform.SetParent(Group("Decor"), false);
-            root.transform.position = wallPoint + outward * 0.1f;
-            var pivot = new GameObject("Pivot");
-            pivot.transform.SetParent(root.transform, false);
-            Part("Arm", pivot.transform, root.transform.position + Vector3.up * 0.22f, new Vector3(0.07f, 0.45f, 0.07f), M.LedAmber, 1f);
-            Part("Knob", pivot.transform, root.transform.position + Vector3.up * 0.46f, new Vector3(0.14f, 0.1f, 0.14f), M.LedRed, 1f, false);
-
-            var lever = root.AddComponent<DoorLever>();
-            lever.door = door;
-            lever.pivot = pivot.transform;
-        }
-
-        // --------------------------------------------------------------- windows
-
-        private static void BuildWindows()
-        {
-            for (int z = 0; z < MapLayout.Height; z++)
-                for (int x = 0; x < MapLayout.Width; x++)
-                    if (Holes.ContainsKey((x, z, 1)) && MapLayout.At(x, z) == 'X') BuildWindow(x, z);
-        }
-
-        private static void BuildWindow(int x, int z)
-        {
-            Vector3 c = MapLayout.CellCenter(x, z);
-            float ex = c.x + C * 0.5f;
-
-            Part("WindowSill", Group("Metal"), new Vector3(ex, 1.1f, c.z), new Vector3(T + 0.1f, 0.12f, 3.4f), M.Metal, 1f);
-            Part("WindowHead", Group("Metal"), new Vector3(ex, 2.7f, c.z), new Vector3(T + 0.1f, 0.12f, 3.4f), M.Metal, 1f);
-            Part("WindowMullion", Group("Metal"), new Vector3(ex, 1.9f, c.z), new Vector3(0.14f, 1.6f, 0.12f), M.Metal, 1f);
-
-            // Two clear panes. A hard enough hand slap shatters one into physical shards.
-            for (int side = -1; side <= 1; side += 2)
-            {
-                var pane = Part("GlassPane", Group("Glass"), new Vector3(ex, 1.9f, c.z + side * 0.82f),
-                    new Vector3(0.05f, 1.6f, 1.56f), M.Glass, 1f);
-                var glass = pane.AddComponent<BreakableGlass>();
-                glass.rend = pane.GetComponent<MeshRenderer>();
-                glass.col = pane.GetComponent<BoxCollider>();
-                glass.shardMaterial = M.Glass;
-            }
-        }
-
-        // ----------------------------------------------------------- start rooms
-
-        /// <summary>The room you can spawn in. Every copy is identical.</summary>
-        private static void BuildStartRoom(RoomInfo r)
-        {
-            Vector3 O = new Vector3(r.rect.x * C, 0f, r.rect.z * C);
-            Vector3 L(float x, float y, float z) => O + new Vector3(x, y, z);
-
-            for (int i = 0; i < 6; i++)
-                Part("Locker", Group("Metal"), L(0.5f, 1f, 3f + i * 1.25f), new Vector3(0.5f, 2f, 0.6f), M.Rack, 1f);
-            Part("Bench", Group("Concrete"), L(12f, 0.25f, 11f), new Vector3(3f, 0.5f, 0.8f), M.Concrete, 2f);
-            Part("Bench", Group("Concrete"), L(8f, 0.25f, 11f), new Vector3(1.5f, 0.5f, 0.8f), M.Concrete, 2f);
-            CrateStack(L(21.5f, 0f, 14.5f), 2);
-
-            Part("ApproachStripe", Group("Decor"), L(10f, 0.011f, 14.8f), new Vector3(3.4f, 0.02f, 0.8f), M.Hazard, 0.5f, false);
-            Part("WallBand", Group("Decor"), L(10f, 0.3f, 15.84f), new Vector3(3.4f, 0.4f, 0.04f), M.Hazard, 0.5f, false);
-
-            // Control console against the south wall.
-            Desk(L(8f, 0f, 1.3f), 180f, 3.6f, false);
-            Desk(L(15f, 0f, 1.3f), 180f, 3.0f, false);
-            for (int i = 0; i < 5; i++)
-            {
-                float sx = 6.6f + i * 1.65f;
-                Part("ConsoleScreen", Group("Decor"), L(sx, 1.15f, 1.0f), new Vector3(0.7f, 0.45f, 0.05f), M.Rack, 1f, false);
-                Part("ConsoleGlow", Group("Decor"), L(sx, 1.15f, 1.03f), new Vector3(0.62f, 0.37f, 0.01f),
-                    i % 3 == 1 ? M.PanelDead : (i % 2 == 0 ? M.LedGreen : M.LedAmber), 1f, false);
-            }
-            Chair(L(8f, 0f, 2.6f), 0f);
-            Chair(L(14.5f, 0f, 2.6f), 20f);
-
-            Pipe(L(0.5f, 3.7f, 0.35f), L(23.5f, 3.7f, 0.35f), 0.1f);
-            Pipe(L(0.5f, 3.35f, 0.35f), L(23.5f, 3.35f, 0.35f), 0.07f);
-            Part("FloorDrain", Group("Decor"), L(17f, 0.011f, 8f), new Vector3(0.7f, 0.02f, 0.7f), M.Rack, 1f, false);
-            Part("WarningBoard", Group("Decor"), L(4f, 2.1f, 15.82f), new Vector3(1.2f, 0.8f, 0.03f), M.Hazard, 0.5f, false);
-            Part("WarningBoard", Group("Decor"), L(7f, 2.1f, 15.82f), new Vector3(0.8f, 0.8f, 0.03f), M.Hazard, 0.5f, false);
-            Part("Cabinet", Group("Metal"), L(23.4f, 1f, 14f), new Vector3(0.6f, 2f, 1.2f), M.Rack, 1f);
-            Cylinder("Extinguisher", L(23.2f, 0.45f, 12.4f), new Vector3(0.18f, 0.24f, 0.18f), M.Red);
-
-            // The atrium the window looks into: open, with a little cover (no pillars).
-            Divider(L(30f, 0f, 6f), 90f, false);
-            Divider(L(31f, 0f, 14f), 0f, false);
-            CrateStack(L(27f, 0f, 17f), 2);
-            CrateStack(L(34f, 0f, 3f), 3);
         }
 
         // -------------------------------------------------------------- pit rooms
@@ -1034,7 +958,7 @@ namespace Monk.EditorTools
                     if (NearDoor(c)) continue;
 
                     float r = Rand(x, z, 600);
-                    if (r > 0.13f) continue;
+                    if (r > 0.22f) continue;
                     int wall = PickWall(x, z, 601);
                     if (wall < 0) continue;
 
@@ -1054,6 +978,12 @@ namespace Monk.EditorTools
                         Desk(deskPos, yaw, 1.4f, Rand(x, z, 605) > 0.5f);
                         Chair(deskPos - n * 0.7f, yaw + (alongX ? 0f : 90f) + 150f);
                     }
+                    else if (r < 0.12f)
+                        FallenDrywall(c + n * (C * 0.5f - T * 0.5f - 0.9f), yaw);
+                    else if (r < 0.15f)
+                        CrossingPipe(c, n, wall);
+                    else if (r < 0.18f)
+                        RackRow(c + n * (C * 0.5f - T * 0.5f - 0.6f) - along * 1.0f, yaw, 2 + (int)(Rand(x, z, 610) * 2f));
                     else
                         Shelf(c + n * (C * 0.5f - T * 0.5f - 0.3f), yaw);
                 }
@@ -1065,6 +995,7 @@ namespace Monk.EditorTools
             cells.Add(MapLayout.ExitCell);
             foreach (var cell in cells)
             {
+                if (_fuseCells.Contains(cell)) continue;   // a fuse box lives here
                 int x = cell.x, z = cell.y;
                 int open = -1;
                 for (int d = 0; d < 4; d++) if (!MapLayout.NeedsWall(x, z, d)) { open = d; break; }
@@ -1328,44 +1259,6 @@ namespace Monk.EditorTools
             go.AddComponent<ExitZone>().bounds = new Bounds(c + Vector3.up * 1.5f, new Vector3(C, 3f, C) * 0.8f);
         }
 
-        // -------------------------------------------------------- player, gameplay
-
-        private static ArmLocomotion BuildPlayerAndGameplay()
-        {
-            RoomInfo first = null;
-            foreach (var r in MapLayout.Rooms) if (r.kind == RoomKind.Start) { first = r; break; }
-            Vector3 start = MapLayout.CellCenter(first.Spawn.x, first.Spawn.y);
-            var loco = GymBuilder.BuildPlayer(_root, new Vector3(start.x, 0.1f, start.z));
-
-            var health = loco.gameObject.AddComponent<PlayerHealth>();
-            health.locomotion = loco;
-            health.startCheckpoint = new Vector3(start.x, 1.3f, start.z);
-            loco.gameObject.AddComponent<HandInteractor>().locomotion = loco;
-            loco.gameObject.AddComponent<HandImpactAudio>().locomotion = loco;
-            var spawn = loco.gameObject.AddComponent<RandomSpawn>();
-            spawn.locomotion = loco;
-            spawn.health = health;
-
-            int n = 0;
-            foreach (var r in MapLayout.Rooms)
-            {
-                if (r.kind != RoomKind.Start) continue;
-                n++;
-                Vector3 sp = MapLayout.CellCenter(r.Spawn.x, r.Spawn.y);
-
-                var point = new GameObject("Start Room " + n);
-                point.transform.SetParent(Group("Zones"), false);
-                point.transform.position = sp;
-                point.AddComponent<SpawnPoint>();
-
-                // Reaching any start room makes it your respawn point.
-                var cp = point.AddComponent<CheckpointZone>();
-                cp.bounds = new Bounds(new Vector3(r.rect.x * C + 12f, 1.5f, r.rect.z * C + 8f), new Vector3(24f, 4f, 16f));
-                cp.spawn = new Vector3(sp.x, 1.3f, sp.z);
-            }
-            return loco;
-        }
-
         private static void BuildAudioAndLights(ArmLocomotion loco)
         {
             var lights = new GameObject("Light Manager");
@@ -1418,7 +1311,7 @@ namespace Monk.EditorTools
 
             foreach (var kv in new List<KeyValuePair<string, Transform>>(Groups))
             {
-                if (kv.Key == "Zones") continue;
+                if (kv.Key == "Zones" || kv.Key.StartsWith("Hub:")) continue;
                 Transform group = kv.Value;
                 var src = group.GetComponent<SurfaceProperties>();
                 var children = new List<Transform>();
@@ -1464,11 +1357,16 @@ namespace Monk.EditorTools
             }
             vis.blocks = list.ToArray();
             vis.centers = centers.ToArray();
+            if (_cctvSystem != null) _cctvSystem.chunks = vis;
         }
 
         private static void MarkStatic()
         {
             var names = new HashSet<string> { "Carpet", "Wallpaper", "Concrete", "Ceiling", "Metal", "Water", "Crates", "Dividers" };
+            foreach (var kv in Groups)
+                if (kv.Key.StartsWith("Hub:") && kv.Value != null && kv.Key != "Hub:Decor" && kv.Key != "Hub:Fixtures" && kv.Key != "Hub:Doors")
+                    foreach (var t in kv.Value.GetComponentsInChildren<Transform>())
+                        GameObjectUtility.SetStaticEditorFlags(t.gameObject, StaticEditorFlags.BatchingStatic);
             var blocksRoot = _root.Find("Blocks");
             if (blocksRoot == null) return;
             foreach (Transform block in blocksRoot)

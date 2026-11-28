@@ -20,6 +20,9 @@ namespace Monk.EditorTools
             public Material PoolTile, Linoleum, Wood, Drywall;
             public Material MoldDecal, Scratches, Arrow, WallCrack;
             public Material Water, Glass, Peel, Stain, Crack;
+            public Material HubConcrete, HubFloor, HubPlate, HubGrate, ReinforcedGlass, Plastic, KeyCap, Crt, Scanlines;
+            public Material CctvScreen, Hologram, Mirror, Suit, Accessory, LedCyan, LedWhite;
+            public Material[] Visors;   // index = visor kind; element 0 unused
             public Material PanelOn, PanelFlicker, PanelDead, LampRed, LedGreen, LedRed, LedAmber;
             public Material Spark, ExitGlow, Rack, Red, Paper;
             public Color PanelEmit;
@@ -336,6 +339,126 @@ namespace Monk.EditorTools
                 return new Color(0.1f, 0.09f, 0.07f, a);
             }, true);
 
+
+            // ----- normal maps and PBR masks -----
+            var carpetNormal = NormalTex("CarpetNormal", 512, (u, v) =>
+            {
+                float x = u * 512f, y = v * 512f;
+                float fiber = H((int)x, (int)y, 71) * 0.6f + H((int)x / 2, (int)y / 2, 72) * 0.4f;     // loops of yarn
+                float weave = Mathf.Sin(x * 1.6f) * Mathf.Sin(y * 1.6f) * 0.25f;                      // fabric weave
+                return fiber + weave + Fbm(u, v, 8, 3, 73) * 0.3f;
+            }, 2.2f);
+
+            var wallpaperNormal = NormalTex("WallpaperNormal", 512, (u, v) =>
+            {
+                float x = u * 512f, y = v * 512f;
+                float stripe = ((int)(x / 32f) % 2 == 0) ? 0.3f : 0f;                                  // embossed stripes
+                float cx = (x % 64f) - 32f, cy = (y % 64f) - 32f;
+                float diamond = Mathf.Abs(cx) + Mathf.Abs(cy);
+                float motif = (diamond < 14f && diamond > 9f) ? 0.5f : 0f;
+                return stripe + motif + H((int)x, (int)y, 74) * 0.08f;
+            }, 3f);
+
+            var concreteNormal = NormalTex("ConcreteNormal", 256, (u, v) =>
+                Fbm(u, v, 6, 4, 75) * 0.7f + (H((int)(u * 256f), (int)(v * 256f), 76) > 0.97f ? -0.5f : 0f), 2.5f);
+
+            var ceilingNormal = NormalTex("CeilingNormal", 256, (u, v) =>
+            {
+                float pores = H((int)(u * 256f), (int)(v * 256f), 77) > 0.9f ? -0.6f : 0f;             // acoustic pinholes
+                float x = u * 256f, y = v * 256f;
+                float groove = (x < 4f || y < 4f) ? -0.4f : 0f;
+                return pores + groove + Fbm(u, v, 8, 3, 78) * 0.2f;
+            }, 2f);
+
+            var hubConcrete = Tex("HubConcrete", 512, (u, v) =>
+            {
+                float n = Fbm(u, v, 4, 4, 81);
+                float c0 = 0.36f + n * 0.16f + (H((int)(u * 512f), (int)(v * 512f), 82) - 0.5f) * 0.04f;
+                var c = new Color(c0, c0 * 1.0f, c0 * 1.03f);
+                // vertical grime streaks and scuffs near the bottom of every tile
+                float streak = Mathf.SmoothStep(0.55f, 0.85f, Fbm(u * 0.25f, v, 8, 3, 83));
+                c = Color.Lerp(c, new Color(0.12f, 0.12f, 0.11f), streak * 0.45f);
+                float scuff = Mathf.Abs(Mathf.Sin((u * 40f + v * 13f))) > 0.985f ? 0.7f : 1f;
+                c *= scuff;
+                float rust = Mathf.SmoothStep(0.72f, 0.9f, Fbm(u, v, 3, 3, 84));
+                c = Color.Lerp(c, new Color(0.33f, 0.2f, 0.12f), rust * 0.35f);
+                c.a = 1f;
+                return c;
+            });
+
+            var hubConcreteNormal = NormalTex("HubConcreteNormal", 512, (u, v) =>
+                Fbm(u, v, 6, 4, 85) * 0.8f + (H((int)(u * 512f), (int)(v * 512f), 86) > 0.985f ? -0.7f : 0f), 2.2f);
+
+            var hubFloor = Tex("HubFloor", 512, (u, v) =>
+            {
+                float x = u * 512f, y = v * 512f;
+                float c0 = 0.2f + Fbm(u, v, 5, 4, 87) * 0.1f;
+                var c = new Color(c0, c0, c0 * 1.05f);
+                if ((x % 128f) < 2f || (y % 128f) < 2f) c *= 0.55f;                                    // slab joints
+                float scuff = Mathf.SmoothStep(0.66f, 0.86f, Fbm(u * 2f, v * 2f, 6, 3, 88));
+                c = Color.Lerp(c, new Color(0.45f, 0.44f, 0.42f), scuff * 0.3f);                       // boot scuffs
+                c.a = 1f;
+                return c;
+            });
+
+            var hubFloorNormal = NormalTex("HubFloorNormal", 512, (u, v) =>
+            {
+                float x = u * 512f, y = v * 512f;
+                float joint = ((x % 128f) < 2f || (y % 128f) < 2f) ? -0.8f : 0f;
+                return joint + Fbm(u, v, 8, 3, 89) * 0.4f;
+            }, 2f);
+
+            // Diamond plate: raised lozenges.
+            float PlateHeight(float u, float v)
+            {
+                float x = (u * 8f) % 1f, y = (v * 8f) % 1f;
+                bool alt = ((int)(u * 8f) + (int)(v * 8f)) % 2 == 0;
+                float a = alt ? Mathf.Abs(x - 0.5f) * 1.2f + Mathf.Abs(y - 0.5f) * 0.4f : Mathf.Abs(x - 0.5f) * 0.4f + Mathf.Abs(y - 0.5f) * 1.2f;
+                return Mathf.Clamp01(1f - a * 2.2f);
+            }
+            var plateNormal = NormalTex("PlateNormal", 256, PlateHeight, 3.5f);
+            var plateAlbedo = Tex("PlateAlbedo", 256, (u, v) =>
+            {
+                float h = PlateHeight(u, v);
+                float g = 0.38f + h * 0.18f + (H((int)(u * 256f), (int)(v * 256f), 91) - 0.5f) * 0.05f;
+                g *= 1f - Mathf.SmoothStep(0.6f, 0.9f, Fbm(u, v, 4, 3, 92)) * 0.35f;                    // grime in the valleys
+                return new Color(g, g * 1.02f, g * 1.06f, 1f);
+            });
+            var plateMask = MaskTex("PlateMask", 256, (u, v) =>
+            {
+                float scuff = Mathf.SmoothStep(0.55f, 0.85f, Fbm(u * 3f, v * 3f, 6, 3, 93));           // worn, scratched metal is duller
+                float metallic = 0.9f - scuff * 0.3f;
+                float smooth = Mathf.Lerp(0.62f, 0.2f, scuff) * (0.6f + 0.4f * PlateHeight(u, v));
+                return new Color(metallic, 0f, 0f, smooth);
+            });
+
+            var grateAlbedo = Tex("GrateAlbedo", 256, (u, v) =>
+            {
+                float x = (u * 8f) % 1f, y = (v * 8f) % 1f;
+                bool bar = x < 0.16f || y < 0.16f;
+                if (!bar) return new Color(0.02f, 0.02f, 0.025f, 1f);                                  // the dark gap below
+                float g = 0.32f + (H((int)(u * 256f), (int)(v * 256f), 94) - 0.5f) * 0.06f;
+                return new Color(g, g * 1.04f, g * 1.1f, 1f);
+            });
+            var grateMask = MaskTex("GrateMask", 256, (u, v) =>
+            {
+                float x = (u * 8f) % 1f, y = (v * 8f) % 1f;
+                bool bar = x < 0.16f || y < 0.16f;
+                return bar ? new Color(0.85f, 0f, 0f, 0.5f - H((int)(u * 256f), (int)(v * 256f), 95) * 0.2f) : new Color(0f, 0f, 0f, 0.05f);
+            });
+
+            var glassWire = Tex("GlassWire", 256, (u, v) =>
+            {
+                // wire-reinforced safety glass: a thin diamond mesh in clear glass
+                float d1 = Mathf.Abs(((u + v) * 8f) % 1f - 0.5f), d2 = Mathf.Abs(((u - v + 1f) * 8f) % 1f - 0.5f);
+                bool wire = d1 > 0.485f || d2 > 0.485f;
+                float smudge = Mathf.SmoothStep(0.7f, 0.9f, Fbm(u, v, 5, 3, 96)) * 0.12f;
+                return wire ? new Color(0.75f, 0.85f, 0.85f, 0.55f) : new Color(0.8f, 0.95f, 1f, 0.05f + smudge);
+            }, true);
+
+            var scanlines = Tex("Scanlines", 64, (u, v) =>
+                new Color(0f, 0f, 0f, ((int)(v * 64f) % 2 == 0) ? 0.28f : 0f), true);
+
             // ----- materials -----
             s.Wallpapers = new[]
             {
@@ -366,6 +489,44 @@ namespace Monk.EditorTools
             MakeTransparent(s.Scratches);
             MakeTransparent(s.Arrow);
             MakeTransparent(s.WallCrack);
+
+            foreach (var m in s.Wallpapers) WithNormal(m, wallpaperNormal, 0.8f);
+            foreach (var m in s.Carpets) WithNormal(m, carpetNormal, 1.2f);
+            foreach (var m in s.Ceilings) WithNormal(m, ceilingNormal, 0.8f);
+            WithNormal(s.Concrete, concreteNormal, 1f);
+
+            // Facility hub: grimy concrete, scuffed floor, metal plate and grating with metallic reflections.
+            s.HubConcrete = WithNormal(Mat("HubConcrete", Color.white, hubConcrete, 0.15f, 0f), hubConcreteNormal, 1f);
+            s.HubFloor = WithNormal(Mat("HubFloor", Color.white, hubFloor, 0.35f, 0f), hubFloorNormal, 0.8f);
+            s.HubPlate = WithMask(WithNormal(Mat("HubPlate", Color.white, plateAlbedo, 1f, 1f), plateNormal, 1f), plateMask);
+            s.HubGrate = WithMask(Mat("HubGrate", Color.white, grateAlbedo, 1f, 1f), grateMask);
+            s.ReinforcedGlass = Mat("ReinforcedGlass", Color.white, glassWire, 0.97f, 0f);
+            MakeTransparent(s.ReinforcedGlass);
+            s.Scanlines = Mat("Scanlines", Color.white, scanlines, 0f, 0f);
+            MakeTransparent(s.Scanlines);
+            s.Plastic = Mat("Plastic", new Color(0.72f, 0.7f, 0.62f), null, 0.35f, 0f);
+            s.KeyCap = Mat("KeyCap", new Color(0.8f, 0.78f, 0.7f), null, 0.5f, 0f);
+            s.Crt = Mat("Crt", new Color(0.02f, 0.05f, 0.03f), null, 0.85f, 0f);
+            SetEmission(s.Crt, new Color(0.02f, 0.12f, 0.05f));
+            s.CctvScreen = MatWithShader("CctvScreen", Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Unlit/Texture"), Color.white, null);
+            s.Mirror = MatWithShader("Mirror", Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Unlit/Texture"), Color.white, null);
+            s.Hologram = Mat("Hologram", new Color(0.2f, 0.9f, 1f, 0.45f), null, 0.9f, 0f);
+            SetEmission(s.Hologram, new Color(0.1f, 0.8f, 1f) * 2f);
+            MakeTransparent(s.Hologram);
+            s.Suit = Mat("Suit", Color.white, null, 0.35f, 0f);
+            s.Accessory = Mat("Accessory", Color.white, null, 0.4f, 0.1f);
+            s.LedCyan = Mat("LedCyan", Color.black, null, 0.5f, 0f);
+            SetEmission(s.LedCyan, new Color(0.2f, 0.9f, 1f) * 2f);
+            s.LedWhite = Mat("LedWhite", Color.black, null, 0.5f, 0f);
+            SetEmission(s.LedWhite, new Color(1f, 1f, 1f) * 2f);
+
+            s.Visors = new Material[5];
+            s.Visors[1] = Mat("VisorClear", new Color(0.7f, 0.95f, 1f, 0.22f), null, 0.95f, 0f);
+            s.Visors[2] = Mat("VisorTinted", new Color(0.05f, 0.06f, 0.08f, 0.8f), null, 0.95f, 0f);
+            s.Visors[3] = Mat("VisorRed", new Color(1f, 0.1f, 0.08f, 0.55f), null, 0.9f, 0f);
+            s.Visors[4] = Mat("VisorGold", new Color(1f, 0.78f, 0.2f, 0.7f), null, 0.9f, 0.5f);
+            for (int i = 1; i < s.Visors.Length; i++) MakeTransparent(s.Visors[i]);
+            SetEmission(s.Visors[3], new Color(1f, 0.05f, 0.03f) * 1.5f);
             s.Concrete = Mat("Concrete", Color.white, concrete, 0.1f, 0f);
             s.Metal = Mat("Metal", Color.white, metal, 0.55f, 0.6f);
             s.Hazard = Mat("Hazard", Color.white, hazard, 0.2f, 0f);
@@ -482,7 +643,85 @@ namespace Monk.EditorTools
             return sum / total;
         }
 
+
+        /// <summary>Tangent-space normal map from a tileable height function.</summary>
+        private static Texture2D NormalTex(string name, int size, Func<float, float, float> height, float strength)
+        {
+            string path = $"{Dir}/{name}.png";
+            if (!File.Exists(path))
+            {
+                var h = new float[size * size];
+                for (int y = 0; y < size; y++)
+                    for (int x = 0; x < size; x++) h[y * size + x] = height((x + 0.5f) / size, (y + 0.5f) / size);
+                var px = new Color[size * size];
+                for (int y = 0; y < size; y++)
+                    for (int x = 0; x < size; x++)
+                    {
+                        float hl = h[y * size + (x - 1 + size) % size], hr = h[y * size + (x + 1) % size];
+                        float hd = h[((y - 1 + size) % size) * size + x], hu = h[((y + 1) % size) * size + x];
+                        var n = new Vector3((hl - hr) * strength, (hd - hu) * strength, 1f).normalized;
+                        px[y * size + x] = new Color(n.x * 0.5f + 0.5f, n.y * 0.5f + 0.5f, n.z * 0.5f + 0.5f, 1f);
+                    }
+                var t = new Texture2D(size, size, TextureFormat.RGBA32, false);
+                t.SetPixels(px);
+                File.WriteAllBytes(path, t.EncodeToPNG());
+                UnityEngine.Object.DestroyImmediate(t);
+                AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
+                var imp = (TextureImporter)AssetImporter.GetAtPath(path);
+                imp.textureType = TextureImporterType.NormalMap;
+                imp.wrapMode = TextureWrapMode.Repeat;
+                imp.mipmapEnabled = true;
+                imp.anisoLevel = 4;
+                imp.SaveAndReimport();
+            }
+            return AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+        }
+
+        /// <summary>Linear mask: R = metallic, A = smoothness (URP Lit metallic-gloss map).</summary>
+        private static Texture2D MaskTex(string name, int size, Func<float, float, Color> pixel)
+        {
+            string path = $"{Dir}/{name}.png";
+            if (!File.Exists(path))
+            {
+                var t = new Texture2D(size, size, TextureFormat.RGBA32, false);
+                var px = new Color[size * size];
+                for (int y = 0; y < size; y++)
+                    for (int x = 0; x < size; x++) px[y * size + x] = pixel((x + 0.5f) / size, (y + 0.5f) / size);
+                t.SetPixels(px);
+                File.WriteAllBytes(path, t.EncodeToPNG());
+                UnityEngine.Object.DestroyImmediate(t);
+                AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
+                var imp = (TextureImporter)AssetImporter.GetAtPath(path);
+                imp.sRGBTexture = false;
+                imp.wrapMode = TextureWrapMode.Repeat;
+                imp.mipmapEnabled = true;
+                imp.alphaSource = TextureImporterAlphaSource.FromInput;
+                imp.SaveAndReimport();
+            }
+            return AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+        }
+
+        private static Material WithNormal(Material m, Texture2D normal, float scale)
+        {
+            m.SetTexture("_BumpMap", normal);
+            m.SetFloat("_BumpScale", scale);
+            m.EnableKeyword("_NORMALMAP");
+            EditorUtility.SetDirty(m);
+            return m;
+        }
+
+        private static Material WithMask(Material m, Texture2D mask)
+        {
+            m.SetTexture("_MetallicGlossMap", mask);
+            m.EnableKeyword("_METALLICSPECGLOSSMAP");
+            m.SetFloat("_Smoothness", 1f);       // the mask's alpha scales this
+            m.SetFloat("_Metallic", 1f);
+            EditorUtility.SetDirty(m);
+            return m;
+        }
+
         // ----------------------------------------------------------- material helpers
+
 
         private static Material Mat(string name, Color color, Texture2D tex, float smoothness, float metallic)
         {

@@ -1,10 +1,12 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace Monk.World
 {
     /// <summary>
     /// The map is big, so it is built in blocks. Only blocks near the player stay active (renderers, colliders,
-    /// lights, doors); the fog hides the edge. Blocks far away cost nothing.
+    /// lights, doors); the fog hides the edge. Extra "foci" (the CCTV cameras) keep their surroundings active too
+    /// while they are in use.
     /// </summary>
     public class ChunkVisibility : MonoBehaviour
     {
@@ -15,6 +17,11 @@ namespace Monk.World
         public float blockSize = 24f;
         public GameObject[] blocks;
         public Vector3[] centers;
+
+        [Header("Extra focus points (CCTV)")]
+        public float focusRadius = 26f;
+        public bool focusActive;
+        public readonly List<Transform> foci = new List<Transform>();
 
         private bool[] _on;
         private float _timer;
@@ -49,8 +56,14 @@ namespace Monk.World
             for (int i = 0; i < blocks.Length; i++)
             {
                 if (blocks[i] == null) continue;
-                float d = Vector2.Distance(p, new Vector2(centers[i].x, centers[i].z));
+                Vector2 c = new Vector2(centers[i].x, centers[i].z);
+                float d = Vector2.Distance(p, c);
                 bool want = _on[i] ? d < radius + hysteresis + reach : d < radius + reach;
+
+                if (!want && focusActive)
+                    foreach (var f in foci)
+                        if (f != null && Vector2.Distance(new Vector2(f.position.x, f.position.z), c) < focusRadius + reach) { want = true; break; }
+
                 if (force || want != _on[i])
                 {
                     _on[i] = want;
