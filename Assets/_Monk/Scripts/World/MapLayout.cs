@@ -48,6 +48,8 @@ namespace Monk.World
         /// <summary>Height of the hub floor above the Level 0 floor (0 = the hub is level with the maze).</summary>
         public const float HubFloorY = 0f;
         public const float AtriumCeiling = 12.2f;
+        /// <summary>The ordinary Backrooms ceiling: low and oppressive.</summary>
+        public const float LowCeiling = 2.6f;
 
         private static readonly string[] PitTemplate =
         {
@@ -111,7 +113,7 @@ namespace Monk.World
                 case ',': return 5.2f;
                 case 'R': return 3.0f;
                 case 'o': case 'p': case '=': case '|': case '+': return 6.4f;
-                default: return 3.2f;
+                default: return LowCeiling;
             }
         }
 

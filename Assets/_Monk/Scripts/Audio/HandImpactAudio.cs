@@ -8,6 +8,8 @@ namespace Monk.Audio
     public class HandImpactAudio : MonoBehaviour
     {
         public ArmLocomotion locomotion;
+        [Tooltip("Overall loudness of hand slaps. Kept low so touching things is a soft sound, not a bang.")]
+        [Range(0f, 1f)] public float masterVolume = 0.28f;
 
         private AudioSource[] _pool;
         private int _next;
@@ -23,7 +25,7 @@ namespace Monk.Audio
                 s.playOnAwake = false;
                 s.spatialBlend = 1f;
                 s.minDistance = 1f;
-                s.maxDistance = 20f;
+                s.maxDistance = 12f;
                 s.rolloffMode = AudioRolloffMode.Linear;
                 s.dopplerLevel = 0f;
                 _pool[i] = s;
@@ -63,7 +65,7 @@ namespace Monk.Audio
             _next = (_next + 1) % _pool.Length;
             src.transform.position = e.point;
             src.pitch = pitch;
-            src.volume = Mathf.Lerp(0.15f, 1f, hardness);
+            src.volume = masterVolume * Mathf.Lerp(0.2f, 1f, hardness);
             src.PlayOneShot(clip);
 
             NoiseBus.Emit(e.point, hardness * noiseScale);

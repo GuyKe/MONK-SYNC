@@ -36,8 +36,8 @@ namespace Monk.EditorTools
         {
             int x = Mathf.FloorToInt(cellCentre.x / C), z = Mathf.FloorToInt(cellCentre.z / C);
             if (!MapLayout.NeedsWall(x, z, (wallDir + 2) % 4)) return; // only where it can span wall to wall
-            Vector3 a = cellCentre - towardWall * (C * 0.5f - T * 0.5f - 0.05f) + Vector3.up * 2.55f;
-            Vector3 b = cellCentre + towardWall * (C * 0.5f - T * 0.5f - 0.05f) + Vector3.up * 2.55f;
+            Vector3 a = cellCentre - towardWall * (C * 0.5f - T * 0.5f - 0.05f) + Vector3.up * 2.1f;
+            Vector3 b = cellCentre + towardWall * (C * 0.5f - T * 0.5f - 0.05f) + Vector3.up * 2.1f;
             Pipe(a, b, 0.07f);
         }
 
@@ -59,7 +59,7 @@ namespace Monk.EditorTools
         }
 
         /// <summary>Racks side by side with an uneven skyline of crates on top: ledges to climb.</summary>
-        private static void RackRow(Vector3 start, float yaw, int count)
+        private static void RackRow(Vector3 start, float yaw, int count, bool topCrates = false)
         {
             Quaternion q = Quaternion.Euler(0f, yaw, 0f);
             for (int i = 0; i < count; i++)
@@ -67,7 +67,7 @@ namespace Monk.EditorTools
                 Vector3 p = start + q * new Vector3(i * 0.9f, 0f, 0f);
                 bool knocked = Rand((int)p.x, (int)p.z, 640) < 0.18f;
                 ServerRack(p, yaw, knocked ? 14f : 0f);
-                if (!knocked && Rand((int)p.x + 1, (int)p.z, 641) < 0.55f)
+                if (topCrates && !knocked && Rand((int)p.x + 1, (int)p.z, 641) < 0.55f)
                     CrateStack(p + Vector3.up * 2.1f, 1 + (int)(Rand((int)p.x, (int)p.z + 1, 642) * 2f), yaw);
             }
         }
@@ -146,10 +146,10 @@ namespace Monk.EditorTools
             Cubicle(new Vector3(ax + 4f, 0f, az + 21f), 180f);
 
             // Server rack islands with crates on top: staircases of ledges.
-            RackRow(new Vector3(ax + 14f, 0f, az + 20f), 0f, 5);
-            RackRow(new Vector3(ax + 14f, 0f, az + 21.2f), 180f, 5);
-            RackRow(new Vector3(ax + 26f, 0f, az + 10f), 90f, 4);
-            RackRow(new Vector3(ax + 6f, 0f, az + 28.5f), 0f, 4);
+            RackRow(new Vector3(ax + 14f, 0f, az + 20f), 0f, 5, true);
+            RackRow(new Vector3(ax + 14f, 0f, az + 21.2f), 180f, 5, true);
+            RackRow(new Vector3(ax + 26f, 0f, az + 10f), 90f, 4, true);
+            RackRow(new Vector3(ax + 6f, 0f, az + 28.5f), 0f, 4, true);
 
             FallenDrywall(new Vector3(ax + 22f, 0f, az + 27f), 20f);
             FallenDrywall(new Vector3(ax + 9f, 0f, az + 16.5f), 200f);

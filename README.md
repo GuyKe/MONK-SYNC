@@ -37,7 +37,7 @@ A concrete complex at ground level beside a huge open atrium, with grimy PBR con
 - **CCTV wall:** six live monitors showing real cameras placed in the atrium, the Pitfalls, a relay station and three corridors. Cameras render one at a time and only while you are near the wall, and the maze around them is kept loaded.
 
 ### Level 0
-- A seeded 44 x 44 cell maze (176 m) from `MapLayout.cs`: thin partition walls, dead ends, loops, pillar halls, tall halls with catwalks, flooded areas, three Pitfalls rooms, two server stations. Tests check everything is reachable from the atrium.
+- A seeded 44 x 44 cell maze (176 m) with a low 2.6 m ceiling from `MapLayout.cs`: thin partition walls, dead ends, loops, pillar halls, tall halls with catwalks, flooded areas, three Pitfalls rooms, two server stations. Tests check everything is reachable from the atrium.
 - **Looks:** three wallpapers, three carpets and two ceiling tiles that change across the map, with normal maps (fabric weave, embossed paper), water stains, peeling corners, mold, cracks, tally marks and spray arrows. Textures are generated in code into `Assets/_Monk/Art/Generated` (delete with Monk > Delete Generated Map Textures). All sounds are synthesised at runtime.
 - **Verticality:** fallen drywall ramps, climbable server racks with crates stacked on top, crate stacks, shelving, cubicles, overhead pipes and cross bars to swing from, ventilation ducts, drywall holes through partitions, catwalks.
 - **Fire doors:** heavy doors in the corridors, worked by hand with push-buttons on both sides of both walls. Closing warns with sparks and beeps, then drops hard; being under it eliminates you. Six of them start locked (red lamps).

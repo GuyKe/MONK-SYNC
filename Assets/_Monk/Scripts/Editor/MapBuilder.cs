@@ -372,11 +372,11 @@ namespace Monk.EditorTools
                         if (NearDoor(mid)) continue;
 
                         float along = (horizontal ? mid.x : mid.z) + (Rand(x, z, 502 + dir) - 0.5f) * 1.6f;
-                        Holes[(x, z, dir)] = new Hole { along = along, width = 1.2f, y0 = 1.6f, y1 = 2.6f };
+                        Holes[(x, z, dir)] = new Hole { along = along, width = 1.2f, y0 = 1.3f, y1 = 2.2f };
 
                         float side = Rand(x, z, 504 + dir) > 0.5f ? 0.8f : -0.8f;
                         Vector3 crate = horizontal ? new Vector3(along, 0f, mid.z + side) : new Vector3(mid.x + side, 0f, along);
-                        CrateStack(crate, 2, Rand(x, z, 506) * 40f);
+                        CrateStack(crate, 1, Rand(x, z, 506) * 40f);
                     }
         }
 
@@ -772,7 +772,7 @@ namespace Monk.EditorTools
                 Vector3 lampAt = alongZ ? new Vector3(c.x + wall * wallOff, 1.95f, c.z) : new Vector3(c.x, 1.95f, c.z + wall * wallOff);
                 Vector3 lampSize = alongZ ? new Vector3(0.04f, 0.14f, 0.3f) : new Vector3(0.3f, 0.14f, 0.04f);
                 lockLamps.Add(Part("LockLamp", Group("Decor"), lampAt + outward * 0.03f, lampSize, M.LedRed, 1f, false).GetComponent<Renderer>());
-                Vector3 signAt = new Vector3(lampAt.x, 2.55f, lampAt.z);
+                Vector3 signAt = new Vector3(lampAt.x, ceil - 0.4f, lampAt.z);
                 Vector3 signSize = alongZ ? new Vector3(0.04f, 0.18f, 0.5f) : new Vector3(0.5f, 0.18f, 0.04f);
                 Part("ExitSign", Group("Decor"), signAt + outward * 0.03f, signSize, M.LedGreen, 1f, false);
             }
@@ -860,7 +860,7 @@ namespace Monk.EditorTools
             foreach (float tz in new[] { 1.5f, 4.3f, 9.8f })
                 Part("CableTray", Group("Metal"), L(10f, 2.6f, tz), new Vector3(19f, 0.1f, 0.5f), M.Metal, 1f);
             CrateStack(L(18.8f, 0f, 11f), 2);
-            CrateStack(L(1.2f, 0f, 11f), 3);
+            CrateStack(L(1.2f, 0f, 11f), 2);
 
             Desk(L(18.6f, 0f, 5.6f), 90f, 2.0f);
             Chair(L(17.4f, 0f, 5.6f), 90f);
@@ -962,7 +962,7 @@ namespace Monk.EditorTools
                     Vector3 c = MapLayout.CellCenter(cx, cz);
                     if (placed < 2) CrateStack(new Vector3(c.x + 1.1f, 0f, c.z + 1.1f), 1 + placed, i * 13f);
                     else if (placed == 2) Pipe(c + new Vector3(-1.5f, 2.5f, -1.5f), c + new Vector3(1.2f, 0.35f, 1.2f), 0.1f);
-                    else Part("HangingCable", Group("Decor"), new Vector3(c.x, 2.6f, c.z), new Vector3(0.04f, 1.2f, 0.04f), M.Rack, 1f, false);
+                    else Part("HangingCable", Group("Decor"), new Vector3(c.x, 1.9f, c.z), new Vector3(0.04f, 1.2f, 0.04f), M.Rack, 1f, false);
                     placed++;
                 }
             }
@@ -999,7 +999,7 @@ namespace Monk.EditorTools
                     float side = Rand(x, z, 602) > 0.5f ? 1f : -1f;
 
                     if (r < 0.04f)
-                        CrateStack(c + n * 1.3f + along * (side * 1.2f), 1 + (int)(Rand(x, z, 603) * 3f), Rand(x, z, 604) * 40f);
+                        CrateStack(c + n * 1.3f + along * (side * 1.2f), 1 + (int)(Rand(x, z, 603) * 2f), Rand(x, z, 604) * 40f);
                     else if (r < 0.07f)
                         Divider(c + n * (C * 0.5f - T * 0.5f - 0.5f) + along * (side * 0.6f), yaw, false);
                     else if (r < 0.10f)
@@ -1051,7 +1051,7 @@ namespace Monk.EditorTools
                 }
                 else if (r < 0.67f)
                 {
-                    CrateStack(backFace - n * 0.6f + along * 1.0f, 3, Rand(x, z, 701) * 30f);
+                    CrateStack(backFace - n * 0.6f + along * 1.0f, 2, Rand(x, z, 701) * 30f);
                     CrateStack(backFace - n * 0.6f - along * 1.0f, 2, Rand(x, z, 702) * 30f);
                     Divider(c - n * 0.2f, yaw + 25f, true);
                 }
@@ -1118,26 +1118,26 @@ namespace Monk.EditorTools
 
             Vector3 sizeFlat = eastWest ? new Vector3(len, 0.06f, 0.9f) : new Vector3(0.9f, 0.06f, len);
             Vector3 sizeSide = eastWest ? new Vector3(len, 0.9f, 0.06f) : new Vector3(0.06f, 0.9f, len);
-            Part("DuctFloor", metal, mid + Vector3.up * 1.9f, sizeFlat, M.Metal, 1f);
-            Part("DuctRoof", metal, mid + Vector3.up * 2.8f, sizeFlat, M.Metal, 1f);
+            Part("DuctFloor", metal, mid + Vector3.up * 1.5f, sizeFlat, M.Metal, 1f);
+            Part("DuctRoof", metal, mid + Vector3.up * 2.4f, sizeFlat, M.Metal, 1f);
             Vector3 sideOff = eastWest ? new Vector3(0f, 0f, 0.42f) : new Vector3(0.42f, 0f, 0f);
-            Part("DuctSide", metal, mid + Vector3.up * 2.35f + sideOff, sizeSide, M.Metal, 1f);
-            Part("DuctSide", metal, mid + Vector3.up * 2.35f - sideOff, sizeSide, M.Metal, 1f);
+            Part("DuctSide", metal, mid + Vector3.up * 1.95f + sideOff, sizeSide, M.Metal, 1f);
+            Part("DuctSide", metal, mid + Vector3.up * 1.95f - sideOff, sizeSide, M.Metal, 1f);
 
             for (int k = 0; k < cells; k++)
             {
                 Vector3 p = start + (eastWest ? Vector3.right : Vector3.forward) * ((k + 0.5f) * C);
-                Part("DuctHanger", Group("Decor"), p + Vector3.up * 3.0f, new Vector3(0.05f, 0.4f, 0.05f), M.Metal, 1f, false);
+                Part("DuctHanger", Group("Decor"), p + Vector3.up * 2.5f, new Vector3(0.05f, 0.2f, 0.05f), M.Metal, 1f, false);
             }
 
             var audio = new GameObject("VentAudio");
             audio.transform.SetParent(Group("Decor"), false);
-            audio.transform.position = mid + Vector3.up * 2.35f;
+            audio.transform.position = mid + Vector3.up * 1.95f;
             audio.AddComponent<VentEmitter>();
 
             // Crates under the open end so arms can reach it.
             Vector3 dir = eastWest ? Vector3.right : Vector3.forward;
-            CrateStack(start + dir * 0.9f, 2);
+            CrateStack(start + dir * 0.9f, 1);
         }
 
         // ---------------------------------------------------------------- details
@@ -1279,7 +1279,7 @@ namespace Monk.EditorTools
             for (int i = 0; i < 9; i++)
             {
                 float w = 0.15f + Rand(i, 1, 230) * 0.7f, h = 0.2f + Rand(i, 2, 230) * 1.1f;
-                Vector3 p = face - n * 0.1f + along * ((Rand(i, 3, 230) - 0.5f) * 3.2f) + Vector3.up * (0.4f + Rand(i, 4, 230) * 2.4f);
+                Vector3 p = face - n * 0.1f + along * ((Rand(i, 3, 230) - 0.5f) * 3.2f) + Vector3.up * (0.4f + Rand(i, 4, 230) * 1.7f);
                 var slab = Part("SeamShard", Group("Decor"), p, new Vector3(w, h, 0.12f), M.ExitGlow, 1f, false);
                 slab.transform.rotation = Quaternion.LookRotation(-n, Vector3.up) * Quaternion.Euler(0f, 0f, Rand(i, 5, 230) * 90f - 45f);
             }
