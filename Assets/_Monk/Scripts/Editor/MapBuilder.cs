@@ -58,6 +58,11 @@ namespace Monk.EditorTools
             M = BackroomsAssets.Build();
             Groups.Clear();
             Holes.Clear();
+            _doors.Clear();
+            for (int dz = 0; dz < MapLayout.Height; dz++)
+                for (int dx = 0; dx < MapLayout.Width; dx++)
+                    if (MapLayout.IsDoor(MapLayout.At(dx, dz)))
+                        _doors.Add((MapLayout.CellCenter(dx, dz), MapLayout.DoorRunsAlongZ(dx, dz)));
 
             _root = new GameObject("Backrooms Map").transform;
             Undo.RegisterCreatedObjectUndo(_root.gameObject, "Build Backrooms Map");
@@ -75,6 +80,7 @@ namespace Monk.EditorTools
             BuildServerRoom();
             BuildFloodedHall();
             BuildExit();
+            BuildDetails();
 
             var loco = BuildPlayerAndGameplay();
             BuildMonster();
@@ -96,6 +102,20 @@ namespace Monk.EditorTools
         }
 
         // ---------------------------------------------------------------- helpers
+
+        private static readonly List<(Vector3 c, bool alongZ)> _doors = new List<(Vector3, bool)>();
+
+        /// <summary>True inside the keep-clear zone in front of (and behind) any door.</summary>
+        private static bool NearDoor(Vector3 p)
+        {
+            foreach (var d in _doors)
+            {
+                float dx = Mathf.Abs(p.x - d.c.x), dz = Mathf.Abs(p.z - d.c.z);
+                float along = C * 0.5f + 1.8f, across = C * 0.5f + 0.2f;
+                if (d.alongZ ? (dx < across && dz < along) : (dx < along && dz < across)) return true;
+            }
+            return false;
+        }
 
         private static float Rand(int x, int z, int salt)
         {
@@ -125,6 +145,7 @@ namespace Monk.EditorTools
                 case "Metal": kind = SurfaceKind.Metal; slip = 0.1f; break;
                 case "Water": kind = SurfaceKind.Water; slip = 0.7f; break; // slick floor under the shallow water
                 case "Crates": kind = SurfaceKind.Crate; slip = 0f; break;
+                case "Glass": kind = SurfaceKind.Glass; slip = 0.1f; break;
                 case "Dividers": kind = SurfaceKind.Crate; slip = 0.02f; break;
                 default: Groups[name] = go.transform; return go.transform;
             }
@@ -191,6 +212,7 @@ namespace Monk.EditorTools
 
         private static void CrateStack(Vector3 basePos, int count, float yaw = 0f)
         {
+            if (NearDoor(basePos)) return;
             for (int i = 0; i < count; i++)
             {
                 var c = Part("Crate", Group("Crates"),
@@ -202,6 +224,7 @@ namespace Monk.EditorTools
 
         private static void Divider(Vector3 pos, float yaw, bool knocked)
         {
+            if (NearDoor(pos)) return;
             const float len = 2.4f;
             var g = Group("Dividers");
             GameObject panel, trim;
@@ -421,6 +444,25 @@ namespace Monk.EditorTools
                 Decal("WaterStain", inner + inward * 0.008f + along * off + Vector3.up * (ceil - 0.8f),
                     inward, new Vector2(1.0f, 1.5f), M.Stain);
             }
+
+            // Small fittings, kept off the door approaches.
+            if (NearDoor(inner + inward * 0.5f)) return;
+            float jitter = (Rand(x, z, 51 + dir) - 0.5f) * 2.4f;
+            if (Rand(x, z, 50 + dir) < 0.3f)
+                Part("Outlet", Group("Decor"), inner + inward * 0.012f + along * jitter + Vector3.up * 0.3f,
+                    alongX ? new Vector3(0.08f, 0.12f, 0.02f) : new Vector3(0.02f, 0.12f, 0.08f), M.Paper, 1f, false);
+            if (Rand(x, z, 55 + dir) < 0.2f)
+                Part("LightSwitch", Group("Decor"), inner + inward * 0.012f - along * jitter + Vector3.up * 1.2f,
+                    alongX ? new Vector3(0.08f, 0.12f, 0.02f) : new Vector3(0.02f, 0.12f, 0.08f), M.Paper, 1f, false);
+            if (Rand(x, z, 60 + dir) < 0.25f)
+                Part("Conduit", Group("Decor"), inner + inward * 0.04f + Vector3.up * (ceil - 0.35f),
+                    alongX ? new Vector3(C, 0.06f, 0.06f) : new Vector3(0.06f, 0.06f, C), M.Metal, 1f, false);
+            if (Rand(x, z, 65 + dir) < 0.1f)
+            {
+                Vector3 p = inner + inward * 0.12f + along * ((Rand(x, z, 66 + dir) - 0.5f) * 2f) + Vector3.up * 0.95f;
+                Cylinder("Extinguisher", p, new Vector3(0.16f, 0.22f, 0.16f), M.Red);
+                Part("ExtinguisherBracket", Group("Decor"), p + normal * 0.07f, alongX ? new Vector3(0.22f, 0.08f, 0.04f) : new Vector3(0.04f, 0.08f, 0.22f), M.Rack, 1f, false);
+            }
         }
 
         // ---------------------------------------------------------------- doors
@@ -503,6 +545,16 @@ namespace Monk.EditorTools
                 MountButton(door, east, outE);
                 if (ch == 'A') MountButton(door, west, outW);
                 else MountLever(door, west, outW);
+
+                // green exit sign above each button, hazard-striped frame beside the opening
+                Vector3 signSize = alongZ ? new Vector3(0.04f, 0.18f, 0.5f) : new Vector3(0.5f, 0.18f, 0.04f);
+                Part("ExitSign", Group("Decor"), new Vector3(east.x, 2.55f, east.z) + outE * 0.03f, signSize, M.LedGreen, 1f, false);
+                Part("ExitSign", Group("Decor"), new Vector3(west.x, 2.55f, west.z) + outW * 0.03f, signSize, M.LedGreen, 1f, false);
+                Vector3 stripeE = alongZ ? new Vector3(c.x + wallOff, ceil * 0.5f, c.z + s * (thick * 0.5f + 0.32f)) : new Vector3(c.x + s * (thick * 0.5f + 0.32f), ceil * 0.5f, c.z + wallOff);
+                Vector3 stripeW = alongZ ? new Vector3(c.x - wallOff, ceil * 0.5f, c.z + s * (thick * 0.5f + 0.32f)) : new Vector3(c.x + s * (thick * 0.5f + 0.32f), ceil * 0.5f, c.z - wallOff);
+                Vector3 stripeSz = alongZ ? new Vector3(0.02f, ceil, 0.16f) : new Vector3(0.16f, ceil, 0.02f);
+                Part("FrameStripe", Group("Decor"), stripeE + outE * 0.012f, stripeSz, M.Hazard, 0.5f, false);
+                Part("FrameStripe", Group("Decor"), stripeW + outW * 0.012f, stripeSz, M.Hazard, 0.5f, false);
             }
 
             if (ch != 'A')
@@ -553,28 +605,21 @@ namespace Monk.EditorTools
         {
             Vector3 c = MapLayout.CellCenter(x, z);
             float ex = c.x + C * 0.5f;
-            var concrete = Group("Concrete");
 
-            // An unseen pane keeps the start zone sealed, however shattered the glass looks.
-            var blocker = new GameObject("WindowPane");
-            blocker.transform.SetParent(concrete, false);
-            blocker.transform.position = new Vector3(ex, 1.9f, c.z);
-            blocker.AddComponent<BoxCollider>().size = new Vector3(0.1f, 1.6f, 3.2f);
-
-            // Frame.
             Part("WindowSill", Group("Metal"), new Vector3(ex, 1.1f, c.z), new Vector3(T + 0.1f, 0.12f, 3.4f), M.Metal, 1f);
             Part("WindowHead", Group("Metal"), new Vector3(ex, 2.7f, c.z), new Vector3(T + 0.1f, 0.12f, 3.4f), M.Metal, 1f);
             Part("WindowMullion", Group("Metal"), new Vector3(ex, 1.9f, c.z), new Vector3(0.14f, 1.6f, 0.12f), M.Metal, 1f);
 
-            // Glass shards still clinging to the frame, and a spiderweb of cracks.
-            for (int i = 0; i < 7; i++)
+            // Two clear panes. A hard enough hand slap shatters one into physical shards.
+            for (int side = -1; side <= 1; side += 2)
             {
-                float w = 0.45f + Rand(x, z, 50 + i) * 0.8f, h = 0.35f + Rand(x, z, 60 + i) * 0.7f;
-                float zz = c.z + (Rand(x, z, 70 + i) * 2f - 1f) * 1.3f;
-                float yy = 1.25f + Rand(x, z, 80 + i) * 1.3f;
-                Decal("GlassShard", new Vector3(ex, yy, zz), Vector3.left, new Vector2(w, h), M.Glass, Rand(x, z, 90 + i) * 90f);
+                var pane = Part("GlassPane", Group("Glass"), new Vector3(ex, 1.9f, c.z + side * 0.82f),
+                    new Vector3(0.05f, 1.6f, 1.56f), M.Glass, 1f);
+                var glass = pane.AddComponent<BreakableGlass>();
+                glass.rend = pane.GetComponent<MeshRenderer>();
+                glass.col = pane.GetComponent<BoxCollider>();
+                glass.shardMaterial = M.Glass;
             }
-            Decal("GlassCracks", new Vector3(ex + 0.02f, 1.9f, c.z), Vector3.left, new Vector2(2.6f, 1.7f), M.Crack);
         }
 
         // ---------------------------------------------------------------- vents
@@ -668,12 +713,18 @@ namespace Monk.EditorTools
             Pipe(new Vector3(8f, 4.3f, 57.2f), new Vector3(28f, 4.3f, 57.2f), 0.12f);
             Pipe(new Vector3(8f, 3.9f, 58.7f), new Vector3(28f, 3.9f, 58.7f), 0.1f);
 
-            // Atrium pillars (maze-like cover).
-            foreach (var p in new[] { (10, 1), (12, 1), (14, 1), (10, 3), (12, 3), (14, 3) })
-            {
-                Vector3 c = MapLayout.CellCenter(p.Item1, p.Item2);
-                Part("Pillar", Group("Wallpaper"), new Vector3(c.x, 1.6f, c.z), new Vector3(1f, 3.2f, 1f), M.Wallpaper, 2.4f);
-            }
+            // Office cubicles in the atrium (the pillars are gone: the spawn view is open).
+            Cubicle(new Vector3(44f, 0f, 12f), 0f);
+            Cubicle(new Vector3(53f, 0f, 9f), 90f);
+            Cubicle(new Vector3(56f, 0f, 15.5f), 0f);
+
+            // Metal shelving with boxes: more ledges to climb.
+            Shelf(new Vector3(4.6f, 0f, 26f), 90f);
+            Shelf(new Vector3(4.6f, 0f, 62f), 90f);
+            Shelf(new Vector3(63.4f, 0f, 28f), 90f);
+            Shelf(new Vector3(63.4f, 0f, 56f), 90f);
+            Shelf(new Vector3(12f, 0f, 75.4f), 0f);
+            Shelf(new Vector3(20f, 0f, 75.4f), 0f);
 
             // Catwalk in the tall hall: a ledge to climb onto and hide above sightlines.
             const float cwY = 2.4f;
@@ -683,6 +734,89 @@ namespace Monk.EditorTools
             CrateStack(new Vector3(9.3f, 0f, 57.2f), 2);
             CrateStack(new Vector3(26.7f, 0f, 57.2f), 2);
             CrateStack(new Vector3(14f, cwY, 59f), 2);
+        }
+
+        private static GameObject Cylinder(string name, Vector3 pos, Vector3 scale, Material mat, bool collider = false)
+        {
+            var go = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            go.name = name;
+            if (!collider) Object.DestroyImmediate(go.GetComponent<Collider>());
+            go.transform.SetParent(Group("Decor"), false);
+            go.transform.position = pos;
+            go.transform.localScale = scale;
+            go.GetComponent<MeshRenderer>().sharedMaterial = mat;
+            NoShadows(go);
+            return go;
+        }
+
+        private static void Desk(Vector3 pos, float yaw, float width = 1.8f, bool monitor = true)
+        {
+            var g = Group("Crates");
+            Quaternion q = Quaternion.Euler(0f, yaw, 0f);
+            Vector3 R(Vector3 local) => pos + q * local;
+
+            var top = Part("DeskTop", g, R(new Vector3(0f, 0.74f, 0f)), new Vector3(width, 0.05f, 0.8f), M.Crate, 1f);
+            top.transform.rotation = q;
+            foreach (float sx in new[] { -1f, 1f })
+            {
+                var leg = Part("DeskLeg", g, R(new Vector3(sx * (width * 0.5f - 0.04f), 0.36f, 0f)), new Vector3(0.05f, 0.72f, 0.7f), M.Metal, 1f);
+                leg.transform.rotation = q;
+            }
+            if (!monitor) return;
+            var body = Part("Monitor", Group("Decor"), R(new Vector3(0f, 1.0f, 0.15f)), new Vector3(0.5f, 0.34f, 0.05f), M.Rack, 1f, false);
+            body.transform.rotation = q;
+            var screen = Part("Screen", Group("Decor"), R(new Vector3(0f, 1.0f, 0.118f)), new Vector3(0.44f, 0.28f, 0.01f),
+                Rand((int)pos.x, (int)pos.z, 77) > 0.5f ? M.LedGreen : M.LedAmber, 1f, false);
+            screen.transform.rotation = q;
+        }
+
+        private static void Chair(Vector3 pos, float yaw)
+        {
+            Quaternion q = Quaternion.Euler(0f, yaw, 0f);
+            var seat = Part("ChairSeat", Group("Crates"), pos + q * new Vector3(0f, 0.46f, 0f), new Vector3(0.46f, 0.07f, 0.46f), M.Fabric, 0.5f);
+            seat.transform.rotation = q;
+            var back = Part("ChairBack", Group("Crates"), pos + q * new Vector3(0f, 0.76f, -0.21f), new Vector3(0.46f, 0.5f, 0.06f), M.Fabric, 0.5f);
+            back.transform.rotation = q;
+            Cylinder("ChairPost", pos + Vector3.up * 0.22f, new Vector3(0.06f, 0.22f, 0.06f), M.Metal);
+        }
+
+        private static void Cubicle(Vector3 pos, float yaw)
+        {
+            if (NearDoor(pos)) return;
+            Quaternion q = Quaternion.Euler(0f, yaw, 0f);
+            Divider(pos + q * new Vector3(0f, 0f, 1.2f), yaw, false);
+            Divider(pos + q * new Vector3(-1.2f, 0f, 0f), yaw + 90f, false);
+            Divider(pos + q * new Vector3(1.2f, 0f, 0f), yaw + 90f, false);
+            Desk(pos + q * new Vector3(0f, 0f, 0.7f), yaw);
+            Chair(pos + q * new Vector3(0.2f, 0f, -0.1f), yaw + 160f);
+            // a few papers on the desk
+            Part("Papers", Group("Decor"), pos + q * new Vector3(-0.5f, 0.78f, 0.6f), new Vector3(0.21f, 0.01f, 0.3f), M.Paper, 1f, false);
+        }
+
+        private static void Shelf(Vector3 pos, float yaw)
+        {
+            if (NearDoor(pos)) return;
+            Quaternion q = Quaternion.Euler(0f, yaw, 0f);
+            Vector3 R(Vector3 local) => pos + q * local;
+            const float w = 1.6f, d = 0.5f;
+            foreach (float sx in new[] { -1f, 1f })
+                foreach (float sz in new[] { -1f, 1f })
+                {
+                    var post = Part("ShelfPost", Group("Metal"), R(new Vector3(sx * (w * 0.5f - 0.03f), 1f, sz * (d * 0.5f - 0.03f))), new Vector3(0.05f, 2f, 0.05f), M.Metal, 1f);
+                    post.transform.rotation = q;
+                }
+            for (int i = 0; i < 4; i++)
+            {
+                float y = 0.3f + i * 0.55f;
+                var board = Part("ShelfBoard", Group("Metal"), R(new Vector3(0f, y, 0f)), new Vector3(w, 0.04f, d), M.Metal, 1f);
+                board.transform.rotation = q;
+                for (int k = 0; k < 3; k++)
+                {
+                    if (Rand((int)pos.x + i, (int)pos.z + k, 400) < 0.45f) continue;
+                    var box = Part("ShelfBox", Group("Crates"), R(new Vector3(-0.55f + k * 0.55f, y + 0.2f, 0f)), new Vector3(0.38f, 0.36f, 0.38f), M.Crate, 1f);
+                    box.transform.rotation = q;
+                }
+            }
         }
 
         private static void BuildStartZone()
@@ -697,6 +831,28 @@ namespace Monk.EditorTools
             // Hazard band approaching the airlock.
             Part("ApproachStripe", Group("Decor"), new Vector3(26f, 0.011f, 14.8f), new Vector3(3.4f, 0.02f, 0.8f), M.Hazard, 0.5f, false);
             Part("WallBand", Group("Decor"), new Vector3(24.2f, 0.3f, 15.84f), new Vector3(3.4f, 0.4f, 0.04f), M.Hazard, 0.5f, false);
+
+            // Control console against the south wall with dead and live screens.
+            Desk(new Vector3(20f, 0f, 1.3f), 180f, 3.6f, false);
+            Desk(new Vector3(27f, 0f, 1.3f), 180f, 3.0f, false);
+            for (int i = 0; i < 5; i++)
+            {
+                float sx = 18.6f + i * 1.65f;
+                Part("ConsoleScreen", Group("Decor"), new Vector3(sx, 1.15f, 1.0f), new Vector3(0.7f, 0.45f, 0.05f), M.Rack, 1f, false);
+                Part("ConsoleGlow", Group("Decor"), new Vector3(sx, 1.15f, 1.03f), new Vector3(0.62f, 0.37f, 0.01f),
+                    i % 3 == 1 ? M.PanelDead : (i % 2 == 0 ? M.LedGreen : M.LedAmber), 1f, false);
+            }
+            Chair(new Vector3(20f, 0f, 2.6f), 0f);
+            Chair(new Vector3(26.5f, 0f, 2.6f), 20f);
+
+            // Pipes, a floor drain, warning boards and an equipment cabinet.
+            Pipe(new Vector3(12.5f, 3.7f, 0.45f), new Vector3(35.5f, 3.7f, 0.45f), 0.1f);
+            Pipe(new Vector3(12.5f, 3.35f, 0.45f), new Vector3(35.5f, 3.35f, 0.45f), 0.07f);
+            Part("FloorDrain", Group("Decor"), new Vector3(29f, 0.011f, 8f), new Vector3(0.7f, 0.02f, 0.7f), M.Rack, 1f, false);
+            Part("WarningBoard", Group("Decor"), new Vector3(16f, 2.1f, 15.68f), new Vector3(1.2f, 0.8f, 0.03f), M.Hazard, 0.5f, false);
+            Part("WarningBoard", Group("Decor"), new Vector3(19f, 2.1f, 15.68f), new Vector3(0.8f, 0.8f, 0.03f), M.Hazard, 0.5f, false);
+            Part("Cabinet", Group("Metal"), new Vector3(34.9f, 1f, 14f), new Vector3(0.6f, 2f, 1.2f), M.Rack, 1f);
+            Cylinder("Extinguisher", new Vector3(34.5f, 0.45f, 12.4f), new Vector3(0.18f, 0.24f, 0.18f), M.Red);
         }
 
         private static void BuildPitRoom()
@@ -711,6 +867,22 @@ namespace Monk.EditorTools
 
             // Warning stripes where the ledge begins.
             Part("PitStripe", Group("Decor"), new Vector3(38f, 0.011f, 36.5f), new Vector3(3.4f, 0.02f, 0.5f), M.Hazard, 0.5f, false);
+
+            // Hazard edging along every walkway, and bollards where the ledge begins.
+            for (int cz = 9; cz <= 13; cz++)
+                for (int cx = 9; cx <= 13; cx++)
+                {
+                    char w = MapLayout.At(cx, cz);
+                    Vector3 c = MapLayout.CellCenter(cx, cz);
+                    if (w == '=' || w == '+')
+                        foreach (float side in new[] { -0.55f, 0.55f })
+                            Part("WalkwayEdge", Group("Decor"), new Vector3(c.x, 0.011f, c.z + side), new Vector3(C, 0.02f, 0.1f), M.Hazard, 0.3f, false);
+                    if (w == '|' || w == '+')
+                        foreach (float side in new[] { -0.55f, 0.55f })
+                            Part("WalkwayEdge", Group("Decor"), new Vector3(c.x + side, 0.011f, c.z), new Vector3(0.1f, 0.02f, C), M.Hazard, 0.3f, false);
+                }
+            Cylinder("Bollard", new Vector3(36.9f, 0.45f, 36.7f), new Vector3(0.24f, 0.45f, 0.24f), M.Hazard, true);
+            Cylinder("Bollard", new Vector3(39.1f, 0.45f, 36.7f), new Vector3(0.24f, 0.45f, 0.24f), M.Hazard, true);
 
             var hazard = new GameObject("Pitfalls Kill Zone");
             hazard.transform.SetParent(Group("Zones"), false);
@@ -745,6 +917,16 @@ namespace Monk.EditorTools
             CrateStack(new Vector3(58.8f, 0f, 79f), 2);
             CrateStack(new Vector3(41.2f, 0f, 79f), 3);
 
+            // Workstation, floor cabling and cables dropping from the trays into the racks.
+            Desk(new Vector3(58.6f, 0f, 73.6f), 90f, 2.0f);
+            Chair(new Vector3(57.4f, 0f, 73.6f), 90f);
+            for (int i = 0; i < 6; i++)
+            {
+                float cx = 41.5f + i * 3.1f + Rand(i, 3, 210);
+                Part("FloorCable", Group("Decor"), new Vector3(cx, 0.04f, 73.6f), new Vector3(0.07f, 0.07f, 5.2f - Rand(i, 4, 211) * 1.5f), M.Rack, 1f, false);
+                Part("RackCable", Group("Decor"), new Vector3(xs[i % xs.Length] + 0.2f, 2.35f, 71f), new Vector3(0.05f, 0.5f, 0.05f), M.Rack, 1f, false);
+            }
+
             // Dim red emergency lights: the only real light in here.
             foreach (float x in new[] { 44f, 56f })
             {
@@ -773,6 +955,13 @@ namespace Monk.EditorTools
             probe.size = new Vector3(4.5f, 3.2f, 32.5f);
             probe.boxProjection = true;
             probe.hdr = false;
+
+            // A fallen pipe leaning across the water, half-sunk crates and hanging cables.
+            Pipe(new Vector3(16.4f, 2.5f, 31f), new Vector3(19.4f, 0.35f, 33f), 0.1f);
+            CrateStack(new Vector3(18.4f, 0f, 45f), 2, 15f);
+            CrateStack(new Vector3(17.2f, 0f, 29f), 1, 40f);
+            for (int i = 0; i < 6; i++)
+                Part("HangingCable", Group("Decor"), new Vector3(17.2f + Rand(i, 1, 220) * 2.6f, 2.6f, 26f + i * 4.6f), new Vector3(0.04f, 1.2f, 0.04f), M.Rack, 1f, false);
         }
 
         private static void BuildExit()
@@ -780,9 +969,71 @@ namespace Monk.EditorTools
             Vector3 c = MapLayout.CellCenter(MapLayout.ExitCell.x, MapLayout.ExitCell.y);
             Decal("NoclipSeam", new Vector3(c.x, 1.6f, c.z + C * 0.5f - T - 0.02f), Vector3.back, new Vector2(3f, 3f), M.ExitGlow);
 
+            for (int i = 0; i < 9; i++)
+            {
+                float w = 0.15f + Rand(i, 1, 230) * 0.7f, h = 0.2f + Rand(i, 2, 230) * 1.1f;
+                var slab = Part("SeamShard", Group("Decor"),
+                    new Vector3(c.x + (Rand(i, 3, 230) - 0.5f) * 3.2f, 0.4f + Rand(i, 4, 230) * 2.4f, c.z + C * 0.5f - T - 0.1f),
+                    new Vector3(w, h, 0.12f), M.ExitGlow, 1f, false);
+                slab.transform.rotation = Quaternion.Euler(0f, 0f, Rand(i, 5, 230) * 90f - 45f);
+            }
+
             var go = new GameObject("Exit Zone");
             go.transform.SetParent(Group("Zones"), false);
             go.AddComponent<ExitZone>().bounds = new Bounds(new Vector3(c.x, 1.5f, c.z + 0.5f), new Vector3(C, 3f, 3f));
+        }
+
+        // ------------------------------------------------------------ cell details
+
+        /// <summary>Ceiling fittings everywhere; stains, litter and fallen ceiling tiles on carpet. Door approaches stay clear.</summary>
+        private static void BuildDetails()
+        {
+            var decor = Group("Decor");
+            for (int z = 0; z < MapLayout.Height; z++)
+                for (int x = 0; x < MapLayout.Width; x++)
+                {
+                    char ch = MapLayout.At(x, z);
+                    if (!MapLayout.IsFloor(ch)) continue;
+                    Vector3 c = MapLayout.CellCenter(x, z);
+                    float ceil = MapLayout.CeilingHeight(ch);
+
+                    if (Rand(x, z, 300) < 0.55f)
+                        Part("Sprinkler", decor, new Vector3(c.x + (Rand(x, z, 301) - 0.5f) * 3f, ceil - 0.04f, c.z + (Rand(x, z, 302) - 0.5f) * 3f),
+                            new Vector3(0.07f, 0.08f, 0.07f), M.Metal, 1f, false);
+                    if (Rand(x, z, 303) < 0.3f)
+                        Part("CeilingGrate", decor, new Vector3(c.x + (Rand(x, z, 304) - 0.5f) * 2f, ceil - 0.015f, c.z + (Rand(x, z, 305) - 0.5f) * 2f),
+                            new Vector3(0.6f, 0.03f, 0.6f), M.Rack, 1f, false);
+
+                    if (ch != '.' && ch != ',') continue;
+
+                    for (int i = 0; i < 2; i++)
+                    {
+                        if (Rand(x, z, 310 + i) > 0.35f) continue;
+                        var p = new Vector3(c.x + (Rand(x, z, 312 + i) - 0.5f) * 2.8f, 0.013f, c.z + (Rand(x, z, 314 + i) - 0.5f) * 2.8f);
+                        if (NearDoor(p)) continue;
+                        float s = 1.1f + Rand(x, z, 316 + i) * 1.3f;
+                        Decal("FloorStain", p, Vector3.up, new Vector2(s, s), M.Stain, Rand(x, z, 318 + i) * 360f);
+                    }
+
+                    if (Rand(x, z, 320) < 0.35f)
+                        for (int k = 0; k < 4; k++)
+                        {
+                            var p = new Vector3(c.x + (Rand(x, z, 321 + k) - 0.5f) * 3f, 0.0125f, c.z + (Rand(x, z, 330 + k) - 0.5f) * 3f);
+                            if (NearDoor(p)) continue;
+                            var paper = Part("Paper", decor, p, new Vector3(0.21f, 0.004f, 0.3f), M.Paper, 1f, false);
+                            paper.transform.rotation = Quaternion.Euler(0f, Rand(x, z, 340 + k) * 360f, 0f);
+                        }
+
+                    if (Rand(x, z, 350) < 0.18f)
+                    {
+                        var p = new Vector3(c.x + (Rand(x, z, 351) - 0.5f) * 2.4f, 0.04f, c.z + (Rand(x, z, 352) - 0.5f) * 2.4f);
+                        if (NearDoor(p)) continue;
+                        var tile = Part("FallenTile", decor, p, new Vector3(0.6f, 0.03f, 0.6f), M.CeilingTile, 0.6f, false);
+                        tile.transform.rotation = Quaternion.Euler(Rand(x, z, 353) * 14f - 7f, Rand(x, z, 354) * 360f, Rand(x, z, 355) * 14f - 7f);
+                        var chunk = Part("TileChunk", decor, p + new Vector3(0.5f, -0.02f, 0.3f), new Vector3(0.22f, 0.04f, 0.18f), M.CeilingTile, 0.6f, false);
+                        chunk.transform.rotation = Quaternion.Euler(0f, Rand(x, z, 356) * 360f, 0f);
+                    }
+                }
         }
 
         // ------------------------------------------------------- player, gameplay

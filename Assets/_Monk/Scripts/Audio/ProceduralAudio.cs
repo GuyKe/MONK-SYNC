@@ -113,6 +113,34 @@ namespace Monk.Audio
             0.3f * Sin(1710, t) * Mathf.Exp(-t * 9f) + 0.25f * Sin(2340, t) * Mathf.Exp(-t * 12f) +
             0.15f * Sin(3050, t) * Mathf.Exp(-t * 15f));
 
+        /// <summary>Glass breaking: a burst of noise followed by many bright tinkles.</summary>
+        public static AudioClip Shatter()
+        {
+            var rng = new System.Random(29);
+            const int events = 48;
+            var tk = new float[events]; var fk = new float[events]; var ak = new float[events];
+            for (int k = 0; k < events; k++)
+            {
+                tk[k] = (float)rng.NextDouble() * 0.9f;
+                fk[k] = 2500f + (float)rng.NextDouble() * 4500f;
+                ak[k] = 0.2f + (float)rng.NextDouble() * 0.8f;
+            }
+            float lp = 0f;
+            return Build("shatter", 1.3f, (i, t) =>
+            {
+                float noise = (float)rng.NextDouble() * 2f - 1f;
+                float hp = noise - lp;
+                lp += (noise - lp) * 0.25f;
+                float s = hp * Mathf.Exp(-t * 12f) * 1.2f;
+                for (int k = 0; k < events; k++)
+                {
+                    float dt = t - tk[k];
+                    if (dt > 0f) s += ak[k] * 0.5f * Mathf.Sin(Tau * fk[k] * dt) * Mathf.Exp(-dt * 38f);
+                }
+                return s;
+            });
+        }
+
         public static AudioClip Beep() => Build("beep", 0.14f, (i, t) =>
             Sin(1500, t) * Mathf.Clamp01(t * 200f) * Mathf.Clamp01((0.14f - t) * 200f));
 

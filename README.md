@@ -28,6 +28,9 @@ Menu **Monk > Build Backrooms Map** (empty scene, URP assigned) generates the wh
 
 - **Data-driven:** the layout is the ASCII grid in `Scripts/World/MapLayout.cs` (4 m cells; legend in the file). EditMode tests check every area is reachable. Edit the grid and rebuild.
 - **Textures and audio are generated in code.** Textures land in `Assets/_Monk/Art/Generated` (delete them with Monk > Delete Generated Map Textures to regenerate). Every sound is synthesised at runtime, so there are no art or audio files to import.
+- **Glass:** the observation window is two clear panes. Slap one hard (about 3 m/s) and it shatters into physical shards, opening the start zone. Slower touches just rest on it.
+- **Door approaches:** props are never placed in front of or behind a door (`NearDoor` in `MapBuilder`).
+- **Detail pass:** sprinklers, ceiling grates, outlets, switches, conduit, extinguishers, exit signs, hazard-striped door frames, floor stains, litter, fallen ceiling tiles, office cubicles, metal shelving, a control console, floor cabling and more.
 - **Areas:** concrete start zone with airlock and shattered observation window; carpet maze with an atrium; The Pitfalls (deep square drops, narrow walkways, hanging pipes); flooded hallway (slick floor, reflective water); server / relay station; tall hall with a catwalk.
 - **Verticality:** crate stacks, knocked-over dividers, ceiling pipes, a catwalk, wall nooks (hiding spots cut into drywall) and 0.9 m vent shafts between rooms.
 - **Doors:** fire doors (manual), blast doors (automatic, rise from above) and the airlock. Slap a button or lever with a hand. Closing = warning sparks and beeps, then a heavy drop. Being under it eliminates you.

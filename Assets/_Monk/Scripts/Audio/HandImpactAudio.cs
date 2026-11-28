@@ -54,6 +54,7 @@ namespace Monk.Audio
                 case SurfaceKind.Water: clip = ProceduralAudio.Splash(); break;
                 case SurfaceKind.Metal: clip = ProceduralAudio.Clank(); pitch *= 1.2f; break;
                 case SurfaceKind.Concrete: clip = ProceduralAudio.Thud(); pitch *= 1.3f; break;
+                case SurfaceKind.Glass: clip = ProceduralAudio.Clank(); pitch *= 1.8f; break;
                 case SurfaceKind.Crate: clip = ProceduralAudio.Thud(); pitch *= 0.9f; break;
                 default: clip = ProceduralAudio.Thud(); pitch *= 1.05f; break;
             }

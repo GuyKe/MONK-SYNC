@@ -18,7 +18,7 @@ namespace Monk.EditorTools
             public Material Wallpaper, Carpet, CeilingTile, Concrete, Metal, Hazard, Crate, Fabric, Baseboard;
             public Material Water, Glass, Peel, Stain, Crack;
             public Material PanelOn, PanelFlicker, PanelDead, LampRed, LedGreen, LedRed, LedAmber;
-            public Material Spark, Monster, MonsterEye, ExitGlow, Rack;
+            public Material Spark, Monster, MonsterEye, ExitGlow, Rack, Red, Paper;
             public Color PanelEmit;
         }
 
@@ -181,11 +181,13 @@ namespace Monk.EditorTools
             s.Fabric = Mat("Fabric", Color.white, fabric, 0.02f, 0f);
             s.Baseboard = Mat("Baseboard", Color.white, baseboard, 0.1f, 0f);
             s.Rack = Mat("Rack", new Color(0.1f, 0.11f, 0.12f), null, 0.4f, 0.5f);
+            s.Red = Mat("Red", new Color(0.65f, 0.05f, 0.04f), null, 0.5f, 0.2f);
+            s.Paper = Mat("Paper", new Color(0.88f, 0.86f, 0.78f), null, 0.1f, 0f);
             s.Monster = Mat("Monster", new Color(0.13f, 0.1f, 0.14f), null, 0.3f, 0f);
 
             s.Water = Mat("Water", new Color(0.22f, 0.3f, 0.27f, 0.55f), null, 0.97f, 0.1f);
             MakeTransparent(s.Water);
-            s.Glass = Mat("Glass", new Color(0.7f, 0.9f, 0.95f, 0.14f), null, 0.92f, 0f);
+            s.Glass = Mat("Glass", new Color(0.85f, 0.97f, 1f, 0.05f), null, 0.97f, 0f); // nearly clear
             MakeTransparent(s.Glass);
             s.Stain = Mat("WaterStainDecal", Color.white, stainDecal, 0f, 0f);
             MakeTransparent(s.Stain);

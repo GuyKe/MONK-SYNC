@@ -5,7 +5,7 @@ namespace Monk.Locomotion
     public enum SurfacePreset { Custom, Rough, Normal, Smooth, Slick, Ice }
 
     /// <summary>What a surface is made of. Drives impact sounds.</summary>
-    public enum SurfaceKind { Wallpaper, Carpet, Concrete, Metal, Water, Crate }
+    public enum SurfaceKind { Wallpaper, Carpet, Concrete, Metal, Water, Crate, Glass }
 
     /// <summary>
     /// Per-surface tuning. Put on a collider (or a parent of it).
