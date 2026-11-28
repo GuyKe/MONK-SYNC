@@ -55,6 +55,8 @@ namespace Monk.Locomotion
             public Vector3 anchor;      // sphere centre while stuck
             public Vector3 normal;
             public Vector3 lastFree;    // last un-stuck hand position
+            public Vector3 lastRel;     // hand offset from head last step (for per-step hand motion)
+            public float separation;    // how far the hand has been drawn away from the surface (m)
             public float slip;          // 0 = full traction, 1 = frictionless
         }
 
@@ -76,7 +78,11 @@ namespace Monk.Locomotion
 
         private void Start()
         {
-            foreach (var h in _hands) h.lastFree = ArmTarget(h);
+            foreach (var h in _hands)
+            {
+                h.lastFree = ArmTarget(h);
+                h.lastRel = h.lastFree - head.position;
+            }
         }
 
         private void FixedUpdate()
@@ -98,14 +104,26 @@ namespace Monk.Locomotion
 
             if (pushing > 0)
             {
-                // Gravity still acts while hands hold: a relaxed arm on a wall sags instead of hovering.
-                Vector3 move = pushSum / pushing + Vector3.down * (profile.gravity * dt * dt);
+                Vector3 push = pushSum / pushing;
                 float cap = profile.maxPushSpeed * dt;
-                if (move.sqrMagnitude > cap * cap) move = move.normalized * cap;
+                if (push.sqrMagnitude > cap * cap) push = push.normalized * cap;
+
+                // Gravity keeps acting while hands hold. Only hand motion (push) can resist it, so a relaxed
+                // arm on a wall or floor does not hold you up.
+                Velocity += Vector3.down * (profile.gravity * dt);
+                if (push.sqrMagnitude > 1e-10f)
+                {
+                    Vector3 pushDir = push.normalized;
+                    float against = Vector3.Dot(Velocity, pushDir);
+                    if (against < 0f) Velocity -= pushDir * against;
+                }
+                Vector3 move = push + Velocity * dt;
 
                 Vector3 before = BodyCenter();
-                MoveBody(move, out _);
+                MoveBody(move, out Vector3 hitNormal);
                 Vector3 actual = BodyCenter() - before;
+                if (hitNormal != Vector3.zero && Vector3.Dot(Velocity, hitNormal) < 0f)
+                    Velocity = Vector3.ProjectOnPlane(Velocity, hitNormal);
 
                 // Blocked: hands ask for real movement but geometry stops the body. Let go so you can't get pinned.
                 if (move.magnitude > 0.004f && actual.magnitude < move.magnitude * 0.25f) _blockedTime += dt;
@@ -122,7 +140,6 @@ namespace Monk.Locomotion
                 }
 
                 _history.Push(actual / dt);
-                Velocity = Vector3.zero;
                 _wasPushing = true;
             }
             else
@@ -169,10 +186,13 @@ namespace Monk.Locomotion
             if (h.controller == null) return false;
 
             Vector3 target = ArmTarget(h);
+            Vector3 rel = target - head.position;
+            Vector3 relDelta = rel - h.lastRel; // how the hand moved relative to the body this step
+            h.lastRel = rel;
 
             if (h.stuck)
             {
-                if (!TryHold(h, target, out delta))
+                if (!TryHold(h, target, relDelta, out delta))
                 {
                     h.stuck = false;
                     h.lastFree = target;
@@ -197,6 +217,7 @@ namespace Monk.Locomotion
                     h.stuck = true;
                     h.slip = surface != null ? surface.slipPercentage : profile.defaultSlip;
                     h.normal = hit.normal;
+                    h.separation = 0f;
                     h.anchor = from + (move / dist) * hit.distance + hit.normal * profile.handSkin;
 
                     float speed = dist / dt;
@@ -206,7 +227,7 @@ namespace Monk.Locomotion
                     });
                     SendHaptic(h.node, Mathf.Clamp01(speed / 4f), 0.06f);
 
-                    if (TryHold(h, target, out delta)) return true;
+                    if (TryHold(h, target, relDelta, out delta)) return true;
                     h.stuck = false;
                 }
             }
@@ -216,30 +237,31 @@ namespace Monk.Locomotion
         }
 
         /// <summary>
-        /// Resolves a stuck hand. The real hand moved by d relative to the anchor; the body moves by -d,
-        /// except the share of the tangential part the surface lets the hand slide (slip).
+        /// Resolves a stuck hand from how the hand moved relative to the body this step (relDelta).
+        /// Pressing into the surface pushes the body the opposite way; the sideways part pushes the body
+        /// except for the share the surface lets the hand slide (slip). Moving away does nothing, and
+        /// drawing the hand off the surface releases it. No force comes from a hand that is merely resting.
         /// Returns false when the hand should let go.
         /// </summary>
-        private bool TryHold(Hand h, Vector3 target, out Vector3 delta)
+        private bool TryHold(Hand h, Vector3 target, Vector3 relDelta, out Vector3 delta)
         {
             delta = Vector3.zero;
-            Vector3 d = target - h.anchor;
-            float dn = Vector3.Dot(d, h.normal);
-            if (dn > profile.releaseSlack) return false; // pulled off the surface
+            float dn = Vector3.Dot(relDelta, h.normal);
+            Vector3 tangent = relDelta - h.normal * dn;
 
-            if (h.slip > 0f)
+            h.separation = Mathf.Max(0f, h.separation + dn);
+            if (h.separation > profile.releaseSlack) return false; // drawn off the surface
+
+            if (h.slip > 0f && tangent.sqrMagnitude > 1e-8f)
             {
-                Vector3 tangent = d - h.normal * dn;
-                if (tangent.sqrMagnitude > 1e-8f)
-                {
-                    h.anchor += tangent * h.slip;
-                    if (!RevalidateAnchor(h)) return false; // slid off an edge
-                    d = target - h.anchor;
-                }
+                h.anchor += tangent * h.slip;
+                if (!RevalidateAnchor(h)) return false; // slid off an edge
             }
 
-            if (d.magnitude > profile.unstickDistance) return false;
-            delta = -d;
+            if ((target - h.anchor).magnitude > profile.unstickDistance) return false;
+
+            Vector3 push = h.normal * Mathf.Min(dn, 0f) + tangent * (1f - h.slip);
+            delta = -push;
             return true;
         }
 
